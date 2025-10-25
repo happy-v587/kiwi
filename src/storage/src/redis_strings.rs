@@ -30,7 +30,7 @@ use chrono::Utc;
 use kstd::lock_mgr::ScopeRecordLock;
 use snafu::{OptionExt, ResultExt};
 
-use crate::error::Error::*;
+use crate::error::RedisErrSnafu;
 use crate::{
     ColumnFamilyIndex, DataType, Redis, Result,
     base_key_format::BaseKey,
@@ -398,13 +398,11 @@ impl Redis {
 
         // get value by key
         let string_key = BaseKey::new(key);
+        let encode_key = string_key.encode()?;
         let encode_value = db
-            .get_opt(&string_key.encode()?, &self.read_options)
+            .get_opt(&encode_key, &self.read_options)
             .context(RocksSnafu)?
-            .unwrap_or_else(Vec::new);
-
-        // check key type
-        self.check_type(encode_value.as_slice(), DataType::String)?;
+            .unwrap_or_default();
 
         let mut value: i64 = 0;
         let mut ctime: u64 = Utc::now().timestamp_micros() as u64;
@@ -415,14 +413,17 @@ impl Redis {
             let decode_value = ParsedStringsValue::new(&encode_value[..])?;
             // check ttl
             if !decode_value.is_stale() {
+                // check key type
+                self.check_type(encode_value.as_slice(), DataType::String)?;
+                // check value format
                 let user_value = decode_value.user_value();
                 value = match String::from_utf8_lossy(&user_value).to_string().parse() {
                     Ok(v) => v,
                     Err(_) => {
-                        return Err(RedisErr {
+                        return RedisErrSnafu {
                             message: "value is not an integer or out of range".to_string(),
-                            location: Default::default(),
-                        });
+                        }
+                        .fail();
                     }
                 };
                 ctime = decode_value.ctime();
@@ -431,14 +432,16 @@ impl Redis {
         }
 
         // check overflow
-        value = value.checked_add(incr).ok_or_else(|| RedisErr {
-            message: "increment or decrement would overflow".to_string(),
-            location: Default::default(),
+        value = value.checked_add(incr).ok_or_else(|| {
+            RedisErrSnafu {
+                message: "increment or decrement would overflow".to_string(),
+            }
+            .build()
         })?;
 
         // set new value
         {
-            let mut string_value = StringValue::new(format!("{}", value).to_owned());
+            let mut string_value = StringValue::new(format!("{}", value).into_bytes());
             string_value.set_ctime(ctime);
             string_value.set_etime(etime);
             let cf = self
@@ -447,7 +450,7 @@ impl Redis {
                     message: "cf is not initialized".to_string(),
                 })?;
             let mut batch = rocksdb::WriteBatch::default();
-            batch.put_cf(&cf, string_key.encode()?, string_value.encode());
+            batch.put_cf(&cf, encode_key, string_value.encode());
             db.write_opt(batch, &self.write_options)
                 .context(RocksSnafu)?;
         }
@@ -466,13 +469,11 @@ impl Redis {
 
         // get value by key
         let string_key = BaseKey::new(key);
+        let encode_key = string_key.encode()?;
         let encode_value = db
-            .get_opt(&string_key.encode()?, &self.read_options)
+            .get_opt(&encode_key, &self.read_options)
             .context(RocksSnafu)?
-            .unwrap_or_else(Vec::new);
-
-        // check key type
-        self.check_type(encode_value.as_slice(), DataType::String)?;
+            .unwrap_or_default();
 
         let mut value: f64 = 0.0;
         let mut ctime: u64 = Utc::now().timestamp_micros() as u64;
@@ -483,14 +484,17 @@ impl Redis {
             let decode_value = ParsedStringsValue::new(&encode_value[..])?;
             // check ttl
             if !decode_value.is_stale() {
+                // check key type
+                self.check_type(encode_value.as_slice(), DataType::String)?;
+                // check value format
                 let user_value = decode_value.user_value();
                 value = match String::from_utf8_lossy(&user_value).to_string().parse() {
                     Ok(v) => v,
                     Err(_) => {
-                        return Err(RedisErr {
+                        return RedisErrSnafu {
                             message: "value is not a valid float".to_string(),
-                            location: Default::default(),
-                        });
+                        }
+                        .fail();
                     }
                 };
                 ctime = decode_value.ctime();
@@ -503,15 +507,15 @@ impl Redis {
 
         // check for NaN or infinity
         if value.is_nan() || value.is_infinite() {
-            return Err(RedisErr {
+            return RedisErrSnafu {
                 message: "increment would produce NaN or Infinity".to_string(),
-                location: Default::default(),
-            });
+            }
+            .fail();
         }
 
         // set new value
         {
-            let mut string_value = StringValue::new(format!("{}", value).to_owned());
+            let mut string_value = StringValue::new(format!("{}", value).into_bytes());
             string_value.set_ctime(ctime);
             string_value.set_etime(etime);
             let cf = self
@@ -520,7 +524,7 @@ impl Redis {
                     message: "cf is not initialized".to_string(),
                 })?;
             let mut batch = rocksdb::WriteBatch::default();
-            batch.put_cf(&cf, string_key.encode()?, string_value.encode());
+            batch.put_cf(&cf, encode_key, string_value.encode());
             db.write_opt(batch, &self.write_options)
                 .context(RocksSnafu)?;
         }
