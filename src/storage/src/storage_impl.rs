@@ -273,7 +273,7 @@ impl Storage {
             let src_slot_id = key_to_slot_id(key);
             if self.slot_indexer.get_instance_id(src_slot_id) != instance_id {
                 return Err(Error::RedisErr {
-                    message: "CROSSSLOT Keys in request don't hash to the same slot".into(),
+                    message: error_catalog::CROSSSLOT.to_string(),
                     location: Default::default(),
                 });
             }
@@ -808,7 +808,7 @@ impl Storage {
 
         if source_slot_id != dest_slot_id {
             return InvalidArgumentSnafu {
-                message: "CROSSSLOT Keys in request don't hash to the same slot".to_string(),
+                message: error_catalog::CROSSSLOT.to_string(),
             }
             .fail();
         }
@@ -828,7 +828,7 @@ impl Storage {
         for &k in keys {
             if key_to_slot_id(k) != slot_id {
                 return InvalidArgumentSnafu {
-                    message: "CROSSSLOT Keys in request don't hash to the same slot".to_string(),
+                    message: error_catalog::CROSSSLOT.to_string(),
                 }
                 .fail();
             }
@@ -847,7 +847,7 @@ impl Storage {
         for &k in keys {
             if key_to_slot_id(k) != slot_id {
                 return InvalidArgumentSnafu {
-                    message: "CROSSSLOT Keys in request don't hash to the same slot".to_string(),
+                    message: error_catalog::CROSSSLOT.to_string(),
                 }
                 .fail();
             }
@@ -866,7 +866,7 @@ impl Storage {
         for &k in keys {
             if key_to_slot_id(k) != slot_id {
                 return InvalidArgumentSnafu {
-                    message: "CROSSSLOT Keys in request don't hash to the same slot".to_string(),
+                    message: error_catalog::CROSSSLOT.to_string(),
                 }
                 .fail();
             }
@@ -885,7 +885,7 @@ impl Storage {
         for &k in keys {
             if key_to_slot_id(k) != slot_id {
                 return InvalidArgumentSnafu {
-                    message: "CROSSSLOT Keys in request don't hash to the same slot".to_string(),
+                    message: error_catalog::CROSSSLOT.to_string(),
                 }
                 .fail();
             }
@@ -904,7 +904,7 @@ impl Storage {
         for &k in keys {
             if key_to_slot_id(k) != slot_id {
                 return InvalidArgumentSnafu {
-                    message: "CROSSSLOT Keys in request don't hash to the same slot".to_string(),
+                    message: error_catalog::CROSSSLOT.to_string(),
                 }
                 .fail();
             }
@@ -923,7 +923,7 @@ impl Storage {
         for &k in keys {
             if key_to_slot_id(k) != slot_id {
                 return InvalidArgumentSnafu {
-                    message: "CROSSSLOT Keys in request don't hash to the same slot".to_string(),
+                    message: error_catalog::CROSSSLOT.to_string(),
                 }
                 .fail();
             }

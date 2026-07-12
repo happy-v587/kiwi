@@ -26,6 +26,7 @@ use std::sync::Arc;
 use crate::network_execution::NetworkCmdExecution;
 use bytes::Bytes;
 use client::Client;
+use cmd::ClientExt;
 use cmd::CmdFlags;
 use cmd::table::CmdTable;
 use executor::CmdExecutor;
@@ -183,9 +184,8 @@ async fn handle_network_command(
         }
     } else {
         // Command not found, set an error reply
-        let err_msg = format!("ERR unknown command `{}`", cmd_name);
         warn!("Unknown command: {}", cmd_name);
-        client.set_reply(RespData::Error(err_msg.into()));
+        client.set_error(error_catalog::unknown_command_name(&cmd_name));
     }
 }
 
@@ -358,7 +358,7 @@ async fn process_command_batch(
             let cmd_name_str = String::from_utf8_lossy(&command.cmd_name).to_lowercase();
             if let Some(cmd) = cmd_table.get(&cmd_name_str) {
                 if !cmd.has_flag(CmdFlags::NO_AUTH) {
-                    client.set_reply(RespData::Error("NOAUTH Authentication required.".into()));
+                    client.set_error(error_catalog::NOAUTH);
                     let response = client.take_reply();
                     let encoder_version = client.resp_version();
                     let mut encoder = RespEncoder::new(encoder_version);
@@ -397,90 +397,17 @@ async fn process_command_batch(
     }
 }
 
-/// Enhanced error response generation for storage failures
-fn generate_storage_error_response(error: &DualRuntimeError, command: &str) -> RespData {
+/// Maps cross-runtime failures to a sanitized client-visible RESP error.
+///
+/// Internal details are logged by the caller; this function never leaks
+/// component names, timeouts, or internal reasons to clients.
+fn generate_storage_error_response(error: &DualRuntimeError, _command: &str) -> RespData {
     let error_message = match error {
-        DualRuntimeError::Timeout { timeout } => {
-            format!(
-                "TIMEOUT Command '{}' timed out after {:?}",
-                command, timeout
-            )
-        }
-        DualRuntimeError::Storage(storage_err) => {
-            format!("STORAGE Storage error in '{}': {}", command, storage_err)
-        }
-        DualRuntimeError::Channel(channel_err) => {
-            format!(
-                "CHANNEL Communication error in '{}': {}",
-                command, channel_err
-            )
-        }
-        DualRuntimeError::NetworkRuntime(net_err) => {
-            format!(
-                "NETWORK Network runtime error in '{}': {}",
-                command, net_err
-            )
-        }
-        DualRuntimeError::StorageRuntime(storage_err) => {
-            format!(
-                "STORAGE Storage runtime error in '{}': {}",
-                command, storage_err
-            )
-        }
-        DualRuntimeError::Configuration(config_err) => {
-            format!(
-                "CONFIG Configuration error in '{}': {}",
-                command, config_err
-            )
-        }
-        DualRuntimeError::Lifecycle(lifecycle_err) => {
-            format!(
-                "LIFECYCLE Lifecycle error in '{}': {}",
-                command, lifecycle_err
-            )
-        }
-        DualRuntimeError::HealthCheck(health_err) => {
-            format!(
-                "HEALTH Health check failed in '{}': {}",
-                command, health_err
-            )
-        }
-        DualRuntimeError::Io(io_err) => {
-            format!("IO I/O error in '{}': {}", command, io_err)
-        }
-        DualRuntimeError::CircuitBreakerOpen { reason } => {
-            format!(
-                "CIRCUIT_BREAKER Circuit breaker open in '{}': {}",
-                command, reason
-            )
-        }
-        DualRuntimeError::RuntimeIsolation { runtime, reason } => {
-            format!(
-                "ISOLATION Runtime isolation error in '{}' ({}): {}",
-                command, runtime, reason
-            )
-        }
-        DualRuntimeError::ErrorBoundary { boundary, error } => {
-            format!(
-                "BOUNDARY Error boundary violation in '{}' ({}): {}",
-                command, boundary, error
-            )
-        }
-        DualRuntimeError::FaultIsolation { component, details } => {
-            format!(
-                "FAULT Fault isolation in '{}' ({}): {}",
-                command, component, details
-            )
-        }
-        DualRuntimeError::RecoveryFailed { mechanism, reason } => {
-            format!(
-                "RECOVERY Recovery failed in '{}' ({}): {}",
-                command, mechanism, reason
-            )
-        }
+        DualRuntimeError::Timeout { .. } => error_catalog::COMMAND_TIMEOUT,
+        _ => error_catalog::INTERNAL_SERVER_ERROR,
     };
 
-    RespData::Error(error_message.into())
+    RespData::error(error_message)
 }
 
 #[allow(clippy::unwrap_used)]

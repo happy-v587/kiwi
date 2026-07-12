@@ -58,6 +58,15 @@ jobs:
       - name: Check formatting
         run: make fmt-check
 
+  error-catalog-check:
+    name: error catalog check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check error catalog compliance
+        run: make error-catalog-check
+
   cargo-clippy:
     strategy:
       fail-fast: false

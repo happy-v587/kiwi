@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -55,11 +55,7 @@ impl Cmd for BitcountCmd {
 
         // Check if the number of arguments is valid
         if argv.len() < 2 || argv.len() > 4 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'bitcount' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("bitcount"));
             return false;
         }
 
@@ -80,9 +76,7 @@ impl Cmd for BitcountCmd {
             let start_val: i64 = match String::from_utf8_lossy(&argv[2]).parse() {
                 Ok(val) => val,
                 Err(_) => {
-                    client.set_reply(RespData::Error(
-                        "ERR value is not an integer or out of range".into(),
-                    ));
+                    client.set_error(error_catalog::VALUE_NOT_INTEGER);
                     return;
                 }
             };
@@ -91,9 +85,7 @@ impl Cmd for BitcountCmd {
             let end_val: i64 = match String::from_utf8_lossy(&argv[3]).parse() {
                 Ok(val) => val,
                 Err(_) => {
-                    client.set_reply(RespData::Error(
-                        "ERR value is not an integer or out of range".into(),
-                    ));
+                    client.set_error(error_catalog::VALUE_NOT_INTEGER);
                     return;
                 }
             };
@@ -104,11 +96,7 @@ impl Cmd for BitcountCmd {
             (None, None)
         } else {
             // Invalid number of arguments
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'bitcount' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("bitcount"));
             return;
         };
 
@@ -116,17 +104,7 @@ impl Cmd for BitcountCmd {
             Ok(count) => {
                 client.set_reply(RespData::Integer(count));
             }
-            Err(e) => match e {
-                storage::error::Error::RedisErr { ref message, .. }
-                    if message.starts_with("WRONGTYPE") =>
-                {
-                    // RedisErr already contains the formatted message
-                    client.set_reply(RespData::Error(message.clone().into()));
-                }
-                _ => {
-                    client.set_reply(RespData::Error(format!("ERR {e}").into()));
-                }
-            },
+            Err(e) => client.set_storage_error(&e),
         }
     }
 }

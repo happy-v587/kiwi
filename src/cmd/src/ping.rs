@@ -22,7 +22,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -59,9 +59,7 @@ impl Cmd for PingCmd {
             let arg = client.argv()[1].clone();
             client.set_reply(RespData::BulkString(Some(Bytes::from(arg))));
         } else {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'ping' command".into(),
-            ));
+            client.set_error(error_catalog::wrong_number("ping"));
         }
     }
 }

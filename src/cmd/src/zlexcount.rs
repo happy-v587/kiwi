@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -52,11 +52,7 @@ impl Cmd for ZlexcountCmd {
 
         // Validate argument count
         if argv.len() != 4 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'zlexcount' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("zlexcount"));
             return false;
         }
 
@@ -78,7 +74,7 @@ impl Cmd for ZlexcountCmd {
                 client.set_reply(RespData::Integer(count as i64));
             }
             Err(err_msg) => {
-                client.set_reply(RespData::Error(format!("{}", err_msg).into()));
+                client.set_error(format!("{}", err_msg));
             }
         }
     }

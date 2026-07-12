@@ -22,7 +22,7 @@ use resp::RespData;
 use storage::storage::Storage;
 use subtle::ConstantTimeEq;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 pub type RequirepassProvider = Arc<dyn Fn() -> Option<String> + Send + Sync>;
@@ -86,26 +86,18 @@ impl Cmd for AuthCmd {
                         client.set_authenticated(true);
                         client.set_reply(RespData::SimpleString("OK".into()));
                     } else {
-                        client.set_reply(RespData::Error(
-                            "WRONGPASS invalid username-password pair or user is disabled.".into(),
-                        ));
+                        client.set_error(error_catalog::WRONGPASS);
                     }
                 } else {
-                    client.set_reply(RespData::Error(
-                        "ERR AUTH called without any password configured".into(),
-                    ));
+                    client.set_error(error_catalog::AUTH_NO_PASSWORD_CONFIGURED);
                 }
             }
             3 => {
                 // AUTH <user> <pass> — ACL authentication reserved for future
-                client.set_reply(RespData::Error(
-                    "ERR ACL authentication is not supported".into(),
-                ));
+                client.set_error(error_catalog::AUTH_ACL_NOT_SUPPORTED);
             }
             _ => {
-                client.set_reply(RespData::Error(
-                    "ERR wrong number of arguments for 'auth' command".into(),
-                ));
+                client.set_error(error_catalog::wrong_number("auth"));
             }
         }
     }

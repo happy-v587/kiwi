@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -69,9 +69,7 @@ impl Cmd for ExpireCmd {
         let seconds = match String::from_utf8_lossy(&argv[2]).parse::<i64>() {
             Ok(n) => n,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range".into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
@@ -81,7 +79,7 @@ impl Cmd for ExpireCmd {
                 client.set_reply(RespData::Integer(if success { 1 } else { 0 }));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }

@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
 use client::Client;
 use resp::RespData;
 use std::sync::Arc;
@@ -51,11 +51,7 @@ impl Cmd for ZaddCmd {
 
         // Validate argument count (must be odd: command + key + pairs of score/member)
         if argv.len() < 4 || !argv.len().is_multiple_of(2) {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'zadd' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("zadd"));
             return false;
         }
 
@@ -80,17 +76,13 @@ impl Cmd for ZaddCmd {
                 Ok(s) => {
                     // Check for valid float (not NaN or infinite)
                     if s.is_nan() || s.is_infinite() {
-                        client.set_reply(RespData::Error(
-                            "ERR value is not a valid float".to_string().into(),
-                        ));
+                        client.set_error(error_catalog::VALUE_IS_NOT_VALID_FLOAT);
                         return;
                     }
                     s
                 }
                 Err(_) => {
-                    client.set_reply(RespData::Error(
-                        "ERR value is not a valid float".to_string().into(),
-                    ));
+                    client.set_error(error_catalog::VALUE_IS_NOT_VALID_FLOAT);
                     return;
                 }
             };
@@ -110,7 +102,7 @@ impl Cmd for ZaddCmd {
                 client.set_reply(RespData::Integer(count as i64));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }

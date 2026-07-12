@@ -169,11 +169,10 @@ impl StorageClient {
         for future in futures {
             match future.await {
                 Ok(result) => results.push(result),
-                Err(e) => {
+                Err(_e) => {
                     // For pipelined requests, we continue processing other commands
                     // and return an error response for the failed command
-                    let error_resp =
-                        RespData::Error(format!("ERR pipelined command failed: {}", e).into());
+                    let error_resp = RespData::error(error_catalog::INTERNAL_SERVER_ERROR);
                     results.push(error_resp);
                 }
             }

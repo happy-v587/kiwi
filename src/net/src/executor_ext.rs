@@ -25,10 +25,10 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
+use cmd::ClientExt;
 use cmd::CmdFlags;
 use executor::CmdExecutor;
 use log::{debug, error};
-use resp::RespData;
 use runtime::DualRuntimeError;
 use storage::storage::Storage;
 
@@ -55,8 +55,8 @@ impl CmdExecutorNetworkExt for CmdExecutor {
             // Check argument count first
             let argv = exec.client.argv();
             if !exec.cmd.check_arg(argv.len()) {
-                let error_msg = format!("ERR wrong number of arguments for '{}' command", cmd_name);
-                exec.client.set_reply(RespData::Error(error_msg.into()));
+                let error_msg = error_catalog::wrong_number(&cmd_name);
+                exec.client.set_error(error_msg);
                 return Ok(());
             }
 
@@ -69,9 +69,9 @@ impl CmdExecutorNetworkExt for CmdExecutor {
                     // expected to reconnect to the returned leader address directly.
                     let reply = match gate.leader_resp_addr() {
                         Some(addr) => format!("MOVED {addr}"),
-                        None => "ERR not leader".to_string(),
+                        None => error_catalog::NOT_LEADER.to_string(),
                     };
-                    exec.client.set_reply(RespData::Error(reply.into()));
+                    exec.client.set_error(reply);
                     return Ok(());
                 }
             }
@@ -128,27 +128,20 @@ async fn execute_generic_command(exec: &NetworkCmdExecution) -> Result<(), DualR
                 cmd_name_str, e
             );
             let error_msg = format_storage_error(&cmd_name_str, &e);
-            exec.client.set_reply(RespData::Error(error_msg.into()));
+            exec.client.set_error(error_msg);
         }
     }
 
     Ok(())
 }
 
-/// Format storage error for RESP response
-fn format_storage_error(command: &str, error: &DualRuntimeError) -> String {
+/// Maps cross-runtime failures to a sanitized client-visible RESP error string.
+///
+/// Internal details are logged by the caller; this function never leaks
+/// component names, timeouts, or internal reasons to clients.
+fn format_storage_error(_command: &str, error: &DualRuntimeError) -> String {
     match error {
-        DualRuntimeError::Timeout { timeout } => {
-            format!("ERR {} command timeout after {:?}", command, timeout)
-        }
-        DualRuntimeError::Storage(storage_err) => {
-            format!("ERR storage error in {}: {}", command, storage_err)
-        }
-        DualRuntimeError::Channel(channel_err) => {
-            format!("ERR communication error in {}: {}", command, channel_err)
-        }
-        _ => {
-            format!("ERR internal error in {}: {}", command, error)
-        }
+        DualRuntimeError::Timeout { .. } => error_catalog::COMMAND_TIMEOUT.to_string(),
+        _ => error_catalog::INTERNAL_SERVER_ERROR.to_string(),
     }
 }

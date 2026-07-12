@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{Cmd, CmdFlags, CmdMeta};
+use crate::{ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -62,7 +62,7 @@ impl Cmd for DecrCmd {
                 client.set_reply(RespData::Integer(v));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }

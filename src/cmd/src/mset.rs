@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -65,11 +65,7 @@ impl Cmd for MsetCmd {
         // Check if the number of arguments is valid (must be odd: command + key-value pairs)
         // MSET key1 value1 key2 value2 ... means argv.len() must be odd (>= 3)
         if argv.len() < 3 || argv.len().is_multiple_of(2) {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'mset' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("mset"));
             return false;
         }
 
@@ -94,7 +90,7 @@ impl Cmd for MsetCmd {
 
         match storage.mset(&kvs) {
             Ok(_) => client.set_reply(RespData::SimpleString("OK".to_string().into())),
-            Err(e) => client.set_reply(RespData::Error(format!("ERR {e}").into())),
+            Err(e) => client.set_storage_error(&e),
         }
     }
 }

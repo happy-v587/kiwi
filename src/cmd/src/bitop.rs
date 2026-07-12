@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 /// BITOP operation destkey key [key ...]
@@ -55,11 +55,7 @@ impl Cmd for BitopCmd {
 
         // Check if the number of arguments is valid
         if argv.len() < 4 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'bitop' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("bitop"));
             return false;
         }
 
@@ -75,11 +71,7 @@ impl Cmd for BitopCmd {
 
         // Validate minimum number of arguments
         if argv.len() < 4 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'bitop' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("bitop"));
             return;
         }
 
@@ -96,17 +88,7 @@ impl Cmd for BitopCmd {
             Ok(size) => {
                 client.set_reply(RespData::Integer(size));
             }
-            Err(e) => match e {
-                storage::error::Error::RedisErr { ref message, .. }
-                    if message.starts_with("WRONGTYPE") =>
-                {
-                    // RedisErr already contains the formatted message
-                    client.set_reply(RespData::Error(message.clone().into()));
-                }
-                _ => {
-                    client.set_reply(RespData::Error(format!("ERR {e}").into()));
-                }
-            },
+            Err(e) => client.set_storage_error(&e),
         }
     }
 }

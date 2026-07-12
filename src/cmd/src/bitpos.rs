@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 /// BITPOS key bit [start] [end] [BYTE | BIT]
@@ -57,11 +57,7 @@ impl Cmd for BitposCmd {
 
         // Check if the number of arguments is valid
         if argv.len() < 3 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'bitpos' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("bitpos"));
             return false;
         }
 
@@ -86,11 +82,7 @@ impl Cmd for BitposCmd {
 
         // Validate minimum number of arguments
         if argv.len() < 3 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'bitpos' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("bitpos"));
             return;
         }
 
@@ -98,9 +90,7 @@ impl Cmd for BitposCmd {
         let bit: i64 = match String::from_utf8_lossy(&argv[2]).parse() {
             Ok(val) if val == 0 || val == 1 => val,
             _ => {
-                client.set_reply(RespData::Error(
-                    "ERR The bit argument must be 1 or 0".to_string().into(),
-                ));
+                client.set_error(error_catalog::BIT_MUST_BE_1_OR_0);
                 return;
             }
         };
@@ -117,7 +107,7 @@ impl Cmd for BitposCmd {
                 "BIT" => {
                     // BIT must be last and only valid when both start and end are provided
                     if i != argv.len() - 1 || start.is_none() || end.is_none() {
-                        client.set_reply(RespData::Error("ERR syntax error".to_string().into()));
+                        client.set_error(error_catalog::SYNTAX_ERROR);
                         return;
                     }
 
@@ -127,7 +117,7 @@ impl Cmd for BitposCmd {
                 "BYTE" => {
                     // BYTE must be last and only valid when both start and end are provided
                     if i != argv.len() - 1 || start.is_none() || end.is_none() {
-                        client.set_reply(RespData::Error("ERR syntax error".to_string().into()));
+                        client.set_error(error_catalog::SYNTAX_ERROR);
                         return;
                     }
 
@@ -145,19 +135,13 @@ impl Cmd for BitposCmd {
                                 end = Some(val);
                             } else {
                                 // Too many numeric arguments
-                                client.set_reply(RespData::Error(
-                                    "ERR syntax error".to_string().into(),
-                                ));
+                                client.set_error(error_catalog::SYNTAX_ERROR);
                                 return;
                             }
                             i += 1;
                         }
                         Err(_) => {
-                            client.set_reply(RespData::Error(
-                                "ERR value is not an integer or out of range"
-                                    .to_string()
-                                    .into(),
-                            ));
+                            client.set_error(error_catalog::VALUE_NOT_INTEGER);
                             return;
                         }
                     }
@@ -169,17 +153,7 @@ impl Cmd for BitposCmd {
             Ok(position) => {
                 client.set_reply(RespData::Integer(position));
             }
-            Err(e) => match e {
-                storage::error::Error::RedisErr { ref message, .. }
-                    if message.starts_with("WRONGTYPE") =>
-                {
-                    // RedisErr already contains the formatted message
-                    client.set_reply(RespData::Error(message.clone().into()));
-                }
-                _ => {
-                    client.set_reply(RespData::Error(format!("ERR {e}").into()));
-                }
-            },
+            Err(e) => client.set_storage_error(&e),
         }
     }
 }

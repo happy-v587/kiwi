@@ -96,7 +96,7 @@ impl Redis {
                     let to_del = del_cnt as u64;
                     if to_del > current {
                         return RedisErrSnafu {
-                            message: "hash size underflow".to_string(),
+                            message: error_catalog::HASH_SIZE_UNDERFLOW.to_string(),
                         }
                         .fail();
                     }
@@ -348,7 +348,7 @@ impl Redis {
                         None => {
                             if !parsed_meta.check_modify_count(1) {
                                 return RedisErrSnafu {
-                                    message: "hash size overflow".to_string(),
+                                    message: error_catalog::HASH_SIZE_OVERFLOW.to_string(),
                                 }
                                 .fail();
                             }
@@ -664,7 +664,7 @@ impl Redis {
                     if new_fields_count > 0 {
                         if !parsed_meta.check_modify_count(new_fields_count as u64) {
                             return RedisErrSnafu {
-                                message: "hash size overflow".to_string(),
+                                message: error_catalog::HASH_SIZE_OVERFLOW.to_string(),
                             }
                             .fail();
                         }
@@ -775,7 +775,7 @@ impl Redis {
                         None => {
                             if !parsed_meta.check_modify_count(1) {
                                 return RedisErrSnafu {
-                                    message: "hash size overflow".to_string(),
+                                    message: error_catalog::HASH_SIZE_OVERFLOW.to_string(),
                                 }
                                 .fail();
                             }
@@ -895,7 +895,7 @@ impl Redis {
                             let old_str = String::from_utf8_lossy(&user_val);
                             let old_int: i64 = old_str.parse().map_err(|_| {
                                 RedisErrSnafu {
-                                    message: "hash value is not an integer".to_string(),
+                                    message: error_catalog::HASH_VALUE_NOT_INTEGER.to_string(),
                                 }
                                 .build()
                             })?;
@@ -920,7 +920,7 @@ impl Redis {
                         None => {
                             if !parsed_meta.check_modify_count(1) {
                                 return RedisErrSnafu {
-                                    message: "hash size overflow".to_string(),
+                                    message: error_catalog::HASH_SIZE_OVERFLOW.to_string(),
                                 }
                                 .fail();
                             }
@@ -1041,7 +1041,7 @@ impl Redis {
                             let old_str = String::from_utf8_lossy(&user_val);
                             let old_float: f64 = old_str.parse().map_err(|_| {
                                 RedisErrSnafu {
-                                    message: "hash value is not a valid float".to_string(),
+                                    message: error_catalog::HASH_VALUE_NOT_VALID_FLOAT.to_string(),
                                 }
                                 .build()
                             })?;
@@ -1049,7 +1049,7 @@ impl Redis {
                             let new_val = old_float + increment;
                             if !new_val.is_finite() {
                                 return RedisErrSnafu {
-                                    message: "increment would produce NaN or Infinity".to_string(),
+                                    message: error_catalog::INCR_NAN_OR_INFINITY.to_string(),
                                 }
                                 .fail();
                             }
@@ -1069,7 +1069,7 @@ impl Redis {
                         None => {
                             if !parsed_meta.check_modify_count(1) {
                                 return RedisErrSnafu {
-                                    message: "hash size overflow".to_string(),
+                                    message: error_catalog::HASH_SIZE_OVERFLOW.to_string(),
                                 }
                                 .fail();
                             }

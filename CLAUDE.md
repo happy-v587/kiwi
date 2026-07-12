@@ -100,6 +100,29 @@ Steps to add a command:
 4. Register it in `src/cmd/src/table.rs` via `register_cmd!(cmd_table, YourCmd)`.
 5. Add unit tests in the appropriate crate test directory (e.g., `src/storage/tests/`).
 
+### Error Handling
+
+All client-visible errors must be centralized and uniform.
+
+1. **Error text lives in `error-catalog`**: every string sent to a client as a RESP error must come from the `error-catalog` crate (`src/common/error-catalog/src/lib.rs`). Do not write `"ERR ..."`, `"WRONGTYPE ..."`, `"NOAUTH ..."`, or `"WRONGPASS ..."` literals in command, storage, or network code.
+2. **Storage errors convert themselves**: `storage::error::Error` provides `to_resp_error()`. The command layer should forward storage failures with `client.set_storage_error(&e)` instead of `format!("ERR {e}")`.
+3. **Set errors through the helper**: commands use `ClientExt::set_error(msg)` to send catalog errors to the client. For example:
+   ```rust
+   client.set_error(error_catalog::SYNTAX_ERROR);
+   client.set_error(error_catalog::wrong_number(self.name()));
+   ```
+   When constructing a `RespData` error directly (e.g., in the network layer), use the constructor:
+   ```rust
+   RespData::error(error_catalog::INTERNAL_SERVER_ERROR)
+   ```
+4. **Static vs. dynamic errors**:
+   - Static messages (e.g., syntax error) use catalog constants such as `error_catalog::SYNTAX_ERROR`.
+   - Dynamic messages (e.g., wrong number of arguments for a specific command) use catalog helpers such as `error_catalog::wrong_number(cmd_name)`.
+5. **No double prefixing**: `to_resp_error()` and `error_catalog::ensure_err_prefix()` detect messages that already start with a standard Redis error class (`ERR`, `WRONGTYPE`, etc.) and avoid prepending `ERR` again.
+6. **Runtime/network errors are sanitized**: internal failure details (channel errors, RocksDB errors, timeout durations, circuit breaker state, isolation reasons) must be logged server-side. Clients receive only coarse-grained errors such as `error_catalog::COMMAND_TIMEOUT` or `error_catalog::INTERNAL_SERVER_ERROR`.
+7. **Dead code removed**: do not re-introduce `CmdRes`, `RespEncode::set_res`, or `TryFrom<i8> for CmdRes`.
+8. **CI enforces this**: `make error-catalog-check` scans the codebase for prohibited patterns. Additions that bypass the catalog will fail CI.
+
 ### Storage Model
 
 - `Storage` holds multiple `Redis` instances (default 3), distributed by a `SlotIndexer` hash.

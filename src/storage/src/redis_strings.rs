@@ -34,12 +34,12 @@ use crate::{
 impl Redis {
     pub fn key_etime(&self, key: &[u8]) -> Result<Option<u64>> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
         let meta_cf = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "MetaCF is not initialized".to_string(),
+                message: error_catalog::META_CF_NOT_INITIALIZED.to_string(),
             })?;
 
         let meta_key = BaseMetaKey::new(key).encode()?;
@@ -67,12 +67,12 @@ impl Redis {
 
     pub fn set_key_etime(&self, key: &[u8], etime: u64) -> Result<bool> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
         let meta_cf = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "MetaCF is not initialized".to_string(),
+                message: error_catalog::META_CF_NOT_INITIALIZED.to_string(),
             })?;
         let key_str = String::from_utf8_lossy(key).to_string();
         let _lock = ScopeRecordLock::new(self.lock_mgr.as_ref(), &key_str);
@@ -172,7 +172,7 @@ impl Redis {
     /// This operation is O(1) as it only reads metadata without accessing the full value.
     pub fn strlen(&self, key: &[u8]) -> Result<i32> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let string_key = BaseKey::new(key);
@@ -217,7 +217,7 @@ impl Redis {
     /// This operation is O(N) where N is the length of the returned substring.
     pub fn getrange(&self, key: &[u8], start: i64, end: i64) -> Result<Vec<u8>> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let string_key = BaseKey::new(key);
@@ -296,7 +296,7 @@ impl Redis {
         // Validate offset early to avoid unnecessary database operations
         if offset < 0 {
             return Err(RedisErr {
-                message: "ERR offset is out of range".to_string(),
+                message: error_catalog::OFFSET_OUT_OF_RANGE.to_string(),
                 location: Default::default(),
             });
         }
@@ -304,13 +304,13 @@ impl Redis {
         // Check for offset upper bound to prevent potential overflow
         if offset > i32::MAX as i64 {
             return Err(RedisErr {
-                message: "ERR offset is out of range".to_string(),
+                message: error_catalog::OFFSET_OUT_OF_RANGE.to_string(),
                 location: Default::default(),
             });
         }
 
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get lock for the key
@@ -360,7 +360,7 @@ impl Redis {
         // Check for string length overflow
         if required_len > i32::MAX as usize {
             return Err(RedisErr {
-                message: "ERR string exceeds maximum allowed size".to_string(),
+                message: error_catalog::STRING_EXCEEDS_MAX_SIZE.to_string(),
                 location: Default::default(),
             });
         }
@@ -402,7 +402,7 @@ impl Redis {
     /// Returns the length of the string after the append operation
     pub fn append(&self, key: &[u8], value: &[u8]) -> Result<i32> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get lock for the key
@@ -441,7 +441,7 @@ impl Redis {
         let new_len = new_value.len();
         if new_len > i32::MAX as usize {
             return Err(RedisErr {
-                message: "string exceeds maximum allowed size".to_string(),
+                message: error_catalog::STRING_EXCEEDS_MAX_SIZE.to_string(),
                 location: Default::default(),
             });
         }
@@ -465,7 +465,7 @@ impl Redis {
     // Get the value of a key
     pub fn get(&self, key: &[u8]) -> Result<String> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
         let string_key = BaseKey::new(key);
         let encode_value = db
@@ -491,7 +491,7 @@ impl Redis {
     /// Get the value of a key as bytes, preserving binary data
     pub fn get_binary(&self, key: &[u8]) -> Result<Vec<u8>> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
         let string_key = BaseKey::new(key);
         let encode_value = db
@@ -540,7 +540,7 @@ impl Redis {
     /// ```
     pub fn mget(&self, keys: &[Vec<u8>]) -> Result<Vec<Option<String>>> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let mut results = Vec::with_capacity(keys.len());
@@ -669,7 +669,7 @@ impl Redis {
         // Validate TTL - must be positive
         if seconds <= 0 {
             return Err(RedisErr {
-                message: "ERR invalid expire time in setex".to_string(),
+                message: error_catalog::INVALID_EXPIRE_TIME.to_string(),
                 location: Default::default(),
             });
         }
@@ -729,7 +729,7 @@ impl Redis {
         // Validate TTL first - must be positive
         if milliseconds <= 0 {
             return Err(RedisErr {
-                message: "ERR invalid expire time in psetex".to_string(),
+                message: error_catalog::INVALID_EXPIRE_TIME_PSETEX.to_string(),
                 location: Default::default(),
             });
         }
@@ -825,7 +825,7 @@ impl Redis {
     /// ```
     pub fn getset(&self, key: &[u8], value: &[u8]) -> Result<Option<String>> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let string_key = BaseKey::new(key);
@@ -1156,7 +1156,7 @@ impl Redis {
 
     pub fn incr_decr(&self, key: &[u8], incr: i64) -> Result<i64> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get lock for the key
@@ -1185,7 +1185,7 @@ impl Redis {
                         Ok(v) => v,
                         Err(_) => {
                             return Err(RedisErr {
-                                message: "value is not an integer or out of range".to_string(),
+                                message: error_catalog::VALUE_NOT_INTEGER.to_string(),
                                 location: Default::default(),
                             });
                         }
@@ -1198,7 +1198,7 @@ impl Redis {
 
         // check overflow
         value = value.checked_add(incr).ok_or_else(|| RedisErr {
-            message: "increment or decrement would overflow".to_string(),
+            message: error_catalog::INCREMENT_DECREMENT_WOULD_OVERFLOW.to_string(),
             location: Default::default(),
         })?;
 
@@ -1221,7 +1221,7 @@ impl Redis {
 
     pub fn incr_decr_float(&self, key: &[u8], incr: f64) -> Result<f64> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get lock for the key
@@ -1250,7 +1250,7 @@ impl Redis {
                         Ok(v) => v,
                         Err(_) => {
                             return Err(RedisErr {
-                                message: "value is not a valid float".to_string(),
+                                message: error_catalog::VALUE_IS_NOT_VALID_FLOAT.to_string(),
                                 location: Default::default(),
                             });
                         }
@@ -1267,7 +1267,7 @@ impl Redis {
         // check for NaN or infinity
         if value.is_nan() || value.is_infinite() {
             return Err(RedisErr {
-                message: "increment would produce NaN or Infinity".to_string(),
+                message: error_catalog::INCR_NAN_OR_INFINITY.to_string(),
                 location: Default::default(),
             });
         }
@@ -1332,7 +1332,7 @@ impl Redis {
         // Validate offset early to avoid unnecessary database operations
         if offset < 0 {
             return Err(RedisErr {
-                message: "ERR bit offset is not an integer or out of range".to_string(),
+                message: error_catalog::BIT_OFFSET_NOT_INTEGER.to_string(),
                 location: Default::default(),
             });
         }
@@ -1340,7 +1340,7 @@ impl Redis {
         // Validate bit value
         if value != 0 && value != 1 {
             return Err(RedisErr {
-                message: "ERR bit is not an integer or out of range".to_string(),
+                message: error_catalog::BIT_IS_NOT_INTEGER.to_string(),
                 location: Default::default(),
             });
         }
@@ -1349,13 +1349,13 @@ impl Redis {
         // Redis has a limit of 2^32-1 for bit offsets
         if offset > (1i64 << 32) - 1 {
             return Err(RedisErr {
-                message: "ERR bit offset is not an integer or out of range".to_string(),
+                message: error_catalog::BIT_OFFSET_NOT_INTEGER.to_string(),
                 location: Default::default(),
             });
         }
 
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get lock for the key
@@ -1443,7 +1443,7 @@ impl Redis {
         // Validate offset early to avoid unnecessary database operations
         if offset < 0 {
             return Err(RedisErr {
-                message: "ERR bit offset is not an integer or out of range".to_string(),
+                message: error_catalog::BIT_OFFSET_NOT_INTEGER.to_string(),
                 location: Default::default(),
             });
         }
@@ -1452,13 +1452,13 @@ impl Redis {
         // Redis has a limit of 2^32-1 for bit offsets
         if offset > (1i64 << 32) - 1 {
             return Err(RedisErr {
-                message: "ERR bit offset is not an integer or out of range".to_string(),
+                message: error_catalog::BIT_OFFSET_NOT_INTEGER.to_string(),
                 location: Default::default(),
             });
         }
 
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let string_key = BaseKey::new(key);
@@ -1511,7 +1511,7 @@ impl Redis {
     /// O(N) where N is the length of the string
     pub fn bitcount(&self, key: &[u8], start: Option<i64>, end: Option<i64>) -> Result<i64> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let string_key = BaseKey::new(key);
@@ -1607,13 +1607,13 @@ impl Redis {
         // Validate bit argument
         if bit != 0 && bit != 1 {
             return Err(RedisErr {
-                message: "ERR The bit argument must be 1 or 0".to_string(),
+                message: error_catalog::BIT_MUST_BE_1_OR_0.to_string(),
                 location: Default::default(),
             });
         }
 
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let string_key = BaseKey::new(key);
@@ -1744,8 +1744,7 @@ impl Redis {
                 // NOT operation only takes one source key
                 if src_keys.len() != 1 {
                     return Err(RedisErr {
-                        message: "ERR BITOP NOT must be called with a single source key"
-                            .to_string(),
+                        message: error_catalog::BITOP_NOT_SINGLE_SOURCE.to_string(),
                         location: Default::default(),
                     });
                 }
@@ -1753,14 +1752,14 @@ impl Redis {
             }
             _ => {
                 return Err(RedisErr {
-                    message: "ERR syntax error".to_string(),
+                    message: error_catalog::SYNTAX_ERROR.to_string(),
                     location: Default::default(),
                 });
             }
         };
 
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get lock for the destination key
@@ -1771,7 +1770,7 @@ impl Redis {
         if operation.to_uppercase() == "NOT" {
             if src_keys.len() != 1 {
                 return Err(RedisErr {
-                    message: "ERR BITOP NOT must be called with a single source key".to_string(),
+                    message: error_catalog::BITOP_NOT_SINGLE_SOURCE.to_string(),
                     location: Default::default(),
                 });
             }
@@ -1846,7 +1845,7 @@ impl Redis {
         // For AND, OR, XOR operations
         if src_keys.is_empty() {
             return Err(RedisErr {
-                message: "ERR wrong number of arguments for 'bitop' command".to_string(),
+                message: error_catalog::wrong_number("bitop"),
                 location: Default::default(),
             });
         }
@@ -1946,12 +1945,12 @@ impl Redis {
     /// * `Err(RedisErr)` - if there's a database error or key doesn't exist
     pub fn get_key_type(&self, key: &[u8]) -> Result<DataType> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
         let meta_cf = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "MetaCF is not initialized".to_string(),
+                message: error_catalog::META_CF_NOT_INITIALIZED.to_string(),
             })?;
 
         let meta_key = BaseMetaKey::new(key).encode()?;
@@ -1981,14 +1980,14 @@ impl Redis {
         use bytes::BufMut;
 
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get MetaCF handle for metadata operations
         let meta_cf = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "MetaCF is not initialized".to_string(),
+                message: error_catalog::META_CF_NOT_INITIALIZED.to_string(),
             })?;
 
         // Check if key exists in MetaCF (where all metadata is stored)
@@ -2066,14 +2065,14 @@ impl Redis {
     /// Scan for keys matching a pattern
     pub fn scan_keys(&self, pattern: &str) -> Result<Vec<String>> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get MetaCF handle to iterate over metadata
         let meta_cf = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "MetaCF is not initialized".to_string(),
+                message: error_catalog::META_CF_NOT_INITIALIZED.to_string(),
             })?;
 
         let mut keys = Vec::new();
@@ -2134,7 +2133,7 @@ impl Redis {
         const CHUNK_SIZE: usize = 1000;
 
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Process each column family separately to limit memory usage
@@ -2189,14 +2188,14 @@ impl Redis {
     /// Get a random key from the database
     pub fn random_key(&self) -> Result<Option<String>> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get MetaCF handle to iterate over metadata
         let meta_cf = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "MetaCF is not initialized".to_string(),
+                message: error_catalog::META_CF_NOT_INITIALIZED.to_string(),
             })?;
 
         // Simple implementation: get the first non-expired key we find

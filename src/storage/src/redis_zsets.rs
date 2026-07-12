@@ -39,7 +39,7 @@ impl Redis {
     /// Add one or more members to a sorted set, or update its score if it already exists
     pub fn zadd(&self, key: &[u8], score_members: &[ScoreMember], ret: &mut i32) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Remove duplicate members in score_members
@@ -60,7 +60,7 @@ impl Redis {
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::ZsetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Acquire lock for the key
@@ -131,7 +131,8 @@ impl Redis {
                                     }
                                     Err(_) => {
                                         return Err(RedisErr {
-                                            message: "invalid score format".to_string(),
+                                            message: error_catalog::INVALID_SCORE_FORMAT
+                                                .to_string(),
                                             location: Default::default(),
                                         });
                                     }
@@ -160,7 +161,7 @@ impl Redis {
 
                     if !parsed_zset_meta.check_modify_count(count) {
                         return Err(RedisErr {
-                            message: "zset size overflow".to_string(),
+                            message: error_catalog::ZSET_SIZE_OVERFLOW.to_string(),
                             location: Default::default(),
                         });
                     }
@@ -226,7 +227,7 @@ impl Redis {
     /// Get the number of members in a sorted set
     pub fn zcard(&self, key: &[u8], ret: &mut i32) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         *ret = 0;
@@ -256,13 +257,13 @@ impl Redis {
     /// Count the number of members in a sorted set with scores within the given values
     pub fn zcount(&self, key: &[u8], min_score: f64, max_score: f64, ret: &mut i32) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
 
         *ret = 0;
@@ -325,14 +326,14 @@ impl Redis {
         ret: &mut Vec<u8>,
     ) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get column family handle for data reads
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::ZsetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Acquire lock for the key
@@ -381,8 +382,7 @@ impl Redis {
                                 new_score = current_score + increment;
                                 if new_score.is_nan() || new_score.is_infinite() {
                                     return Err(RedisErr {
-                                        message: "ERR increment would produce NaN or Infinity"
-                                            .to_string(),
+                                        message: error_catalog::INCR_NAN_OR_INFINITY.to_string(),
                                         location: Default::default(),
                                     });
                                 }
@@ -416,7 +416,7 @@ impl Redis {
                             }
                             Err(_) => {
                                 return Err(RedisErr {
-                                    message: "invalid score format".to_string(),
+                                    message: error_catalog::INVALID_SCORE_FORMAT.to_string(),
                                     location: Default::default(),
                                 });
                             }
@@ -445,13 +445,13 @@ impl Redis {
     /// Get the score associated with the given member in a sorted set
     pub fn zscore(&self, key: &[u8], member: &[u8], ret: &mut Option<Vec<u8>>) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::ZsetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         *ret = None;
@@ -505,13 +505,13 @@ impl Redis {
         count: Option<usize>,
     ) -> Result<(u64, Vec<(String, String)>)> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
 
         // Get existing zset meta
@@ -603,18 +603,18 @@ impl Redis {
     /// Get the rank of a member in a sorted set (0-based index)
     pub fn zrank(&self, key: &[u8], member: &[u8], ret: &mut Option<i64>) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::ZsetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         *ret = None;
@@ -661,7 +661,7 @@ impl Redis {
                 Ok(s) => s,
                 Err(_) => {
                     return Err(RedisErr {
-                        message: "invalid score format".to_string(),
+                        message: error_catalog::INVALID_SCORE_FORMAT.to_string(),
                         location: Default::default(),
                     });
                 }
@@ -698,18 +698,18 @@ impl Redis {
     /// Get the rank of a member in a sorted set, with scores ordered from high to low (0-based index)
     pub fn zrevrank(&self, key: &[u8], member: &[u8], ret: &mut Option<i64>) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::ZsetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         *ret = None;
@@ -756,7 +756,7 @@ impl Redis {
                 Ok(s) => s,
                 Err(_) => {
                     return Err(RedisErr {
-                        message: "invalid score format".to_string(),
+                        message: error_catalog::INVALID_SCORE_FORMAT.to_string(),
                         location: Default::default(),
                     });
                 }
@@ -793,14 +793,14 @@ impl Redis {
     /// Remove one or more members from a sorted set
     pub fn zrem(&self, key: &[u8], members: &[Vec<u8>], ret: &mut i32) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get column family handle for data reads
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::ZsetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Acquire lock for the key
@@ -861,7 +861,7 @@ impl Redis {
                     }
                     Err(_) => {
                         return Err(RedisErr {
-                            message: "invalid score format".to_string(),
+                            message: error_catalog::INVALID_SCORE_FORMAT.to_string(),
                             location: Default::default(),
                         });
                     }
@@ -896,13 +896,13 @@ impl Redis {
     /// Count the members in a sorted set within the given lexicographical range
     pub fn zlexcount(&self, key: &[u8], min: &[u8], max: &[u8], ret: &mut i32) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
 
         *ret = 0;
@@ -984,13 +984,13 @@ impl Redis {
         ret: &mut Vec<Vec<u8>>,
     ) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
 
         *ret = Vec::new();
@@ -1124,13 +1124,13 @@ impl Redis {
         is_inter: bool,
     ) -> Result<i32> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
 
         if keys.is_empty() {
@@ -1140,7 +1140,7 @@ impl Redis {
         // Validate weights length
         if !weights.is_empty() && weights.len() != keys.len() {
             return Err(RedisErr {
-                message: "ERR syntax error".to_string(),
+                message: error_catalog::SYNTAX_ERROR.to_string(),
                 location: Default::default(),
             });
         }
@@ -1352,13 +1352,13 @@ impl Redis {
         ret: &mut Vec<Vec<u8>>,
     ) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
 
         *ret = Vec::new();
@@ -1455,13 +1455,13 @@ impl Redis {
         ret: &mut Vec<Vec<u8>>,
     ) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
 
         *ret = Vec::new();
@@ -1537,14 +1537,14 @@ impl Redis {
     /// Remove all members in a sorted set within the given lexicographical range
     pub fn zremrangebylex(&self, key: &[u8], min: &[u8], max: &[u8], ret: &mut i32) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get column family handle for score iterations
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
 
         let key_str = String::from_utf8_lossy(key).to_string();
@@ -1650,13 +1650,13 @@ impl Redis {
     /// Remove all members in a sorted set within the given indexes
     pub fn zremrangebyrank(&self, key: &[u8], start: i64, stop: i64, ret: &mut i32) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
 
         let key_str = String::from_utf8_lossy(key).to_string();
@@ -1782,14 +1782,14 @@ impl Redis {
         ret: &mut i32,
     ) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Get column family handle for score iterations
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
 
         let key_str = String::from_utf8_lossy(key).to_string();
@@ -1889,13 +1889,13 @@ impl Redis {
         ret: &mut Vec<Vec<u8>>,
     ) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
 
         *ret = Vec::new();
@@ -1991,13 +1991,13 @@ impl Redis {
         ret: &mut Vec<Vec<u8>>,
     ) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_score = self
             .get_cf_handle(ColumnFamilyIndex::ZsetsScoreCF)
             .context(OptionNoneSnafu {
-                message: "cf score is not initialized".to_string(),
+                message: error_catalog::CF_SCORE_NOT_INITIALIZED.to_string(),
             })?;
 
         *ret = Vec::new();
@@ -2094,7 +2094,7 @@ fn aggregate_scores(scores: &[Option<f64>], aggregate: &str) -> Result<f64> {
             if max.is_infinite() { Ok(0.0) } else { Ok(max) }
         }
         _ => Err(RedisErr {
-            message: "ERR syntax error".to_string(),
+            message: error_catalog::SYNTAX_ERROR.to_string(),
             location: Default::default(),
         }),
     }
@@ -2154,7 +2154,7 @@ fn glob_match(text: &str, pattern: &str) -> bool {
 fn parse_lex_range(range: &[u8]) -> Result<(Option<Vec<u8>>, bool)> {
     if range.is_empty() {
         return Err(RedisErr {
-            message: "ERR min or max not valid string range item".to_string(),
+            message: error_catalog::MIN_MAX_NOT_VALID_STRING_RANGE_ITEM.to_string(),
             location: Default::default(),
         });
     }
@@ -2165,7 +2165,7 @@ fn parse_lex_range(range: &[u8]) -> Result<(Option<Vec<u8>>, bool)> {
         b'[' if range.len() > 1 => Ok((Some(range[1..].to_vec()), false)), // inclusive
         b'(' if range.len() > 1 => Ok((Some(range[1..].to_vec()), true)), // exclusive
         _ => Err(RedisErr {
-            message: "ERR min or max not valid string range item".to_string(),
+            message: error_catalog::MIN_MAX_NOT_VALID_STRING_RANGE_ITEM.to_string(),
             location: Default::default(),
         }),
     }

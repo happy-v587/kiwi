@@ -22,7 +22,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
 pub struct HGetAllCmd {
@@ -65,7 +65,7 @@ impl Cmd for HGetAllCmd {
                 client.set_reply(RespData::Array(Some(resp_data)));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {}", e).into()));
+                client.set_storage_error(&e);
             }
         }
     }

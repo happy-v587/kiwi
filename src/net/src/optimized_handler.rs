@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use client::Client;
+use cmd::ClientExt;
 use cmd::table::CmdTable;
 use executor::CmdExecutor;
 use log::{error, warn};
@@ -193,7 +194,7 @@ impl OptimizedConnectionHandler {
                                         }
                                         Err(e) => {
                                             warn!("Pipeline processing error: {}", e);
-                                            let error_response = RespData::Error(format!("ERR {}", e).into());
+                                            let error_response = RespData::error(error_catalog::INTERNAL_SERVER_ERROR);
                                             let mut encoder = RespEncoder::new(RespVersion::RESP2);
                                             encoder.encode_resp_data(&error_response);
                                             let _ = client.write(encoder.get_response().as_ref()).await;
@@ -331,8 +332,7 @@ impl OptimizedConnectionHandler {
             };
             executor.execute(exec).await;
         } else {
-            let err_msg = format!("ERR unknown command `{cmd_name}`");
-            client.set_reply(RespData::Error(err_msg.into()));
+            client.set_error(error_catalog::unknown_command_name(&cmd_name));
         }
     }
 

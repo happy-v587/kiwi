@@ -377,7 +377,7 @@ impl Redis {
     /// Create a RocksDB physical checkpoint at `path`.
     pub fn create_checkpoint(&self, path: &Path) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "Database is not initialized".to_string(),
+            message: error_catalog::DATABASE_NOT_INITIALIZED.to_string(),
         })?;
         db.create_checkpoint(path).context(RocksSnafu)
     }
@@ -410,7 +410,7 @@ impl Redis {
         }
 
         OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         }
         .fail()
     }
@@ -469,7 +469,7 @@ impl Redis {
     /// Used by the Raft apply path (on_binlog_write) to avoid recursive propose.
     pub fn create_rocks_batch(&self) -> Result<Box<dyn crate::batch::Batch + '_>> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "Database is not initialized".to_string(),
+            message: error_catalog::DATABASE_NOT_INITIALIZED.to_string(),
         })?;
 
         // Collect all column family handles
@@ -619,7 +619,7 @@ impl Redis {
         options: &HashMap<String, String>,
     ) -> Result<()> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let opts_vec: Vec<_> = options
@@ -653,8 +653,7 @@ impl Redis {
 
     fn wrong_type_error() -> crate::error::Error {
         RedisErr {
-            message: "WRONGTYPE Operation against a key holding the wrong kind of value"
-                .to_string(),
+            message: error_catalog::WRONGTYPE.to_string(),
             location: Default::default(),
         }
     }
@@ -718,7 +717,7 @@ impl Redis {
         );
         let next_point_str = String::from_utf8_lossy(next_point).to_string();
         let store = self.scan_cursors_store.lock().map_err(|_| RedisErr {
-            message: "Failed to lock scan_cursors_store".to_string(),
+            message: error_catalog::FAILED_TO_LOCK_SCAN_CURSORS_STORE.to_string(),
             location: Default::default(),
         })?;
 
@@ -761,7 +760,7 @@ impl Redis {
                 let etime_offset = val_raw.len() - 8;
                 let etime_bytes = &val_raw[etime_offset..etime_offset + 8];
                 let etime = u64::from_le_bytes(etime_bytes.try_into().map_err(|_| RedisErr {
-                    message: "Failed to read etime".to_string(),
+                    message: error_catalog::FAILED_TO_READ_ETIME.to_string(),
                     location: Default::default(),
                 })?);
 
@@ -775,7 +774,7 @@ impl Redis {
                 let count_offset = TYPE_LENGTH;
                 let count_bytes = &val_raw[count_offset..count_offset + 8];
                 let count = u64::from_le_bytes(count_bytes.try_into().map_err(|_| RedisErr {
-                    message: "Failed to read count".to_string(),
+                    message: error_catalog::FAILED_TO_READ_COUNT.to_string(),
                     location: Default::default(),
                 })?);
 
@@ -786,7 +785,7 @@ impl Redis {
                 let etime_offset = val_raw.len() - 8;
                 let etime_bytes = &val_raw[etime_offset..etime_offset + 8];
                 let etime = u64::from_le_bytes(etime_bytes.try_into().map_err(|_| RedisErr {
-                    message: "Failed to read etime".to_string(),
+                    message: error_catalog::FAILED_TO_READ_ETIME.to_string(),
                     location: Default::default(),
                 })?);
 
@@ -800,7 +799,7 @@ impl Redis {
                 let count_offset = TYPE_LENGTH;
                 let count_bytes = &val_raw[count_offset..count_offset + 8];
                 let count = u64::from_le_bytes(count_bytes.try_into().map_err(|_| RedisErr {
-                    message: "Failed to read count".to_string(),
+                    message: error_catalog::FAILED_TO_READ_COUNT.to_string(),
                     location: Default::default(),
                 })?);
 
@@ -811,7 +810,7 @@ impl Redis {
                 let etime_offset = val_raw.len() - 8;
                 let etime_bytes = &val_raw[etime_offset..etime_offset + 8];
                 let etime = u64::from_le_bytes(etime_bytes.try_into().map_err(|_| RedisErr {
-                    message: "Failed to read etime".to_string(),
+                    message: error_catalog::FAILED_TO_READ_ETIME.to_string(),
                     location: Default::default(),
                 })?);
 
@@ -863,7 +862,7 @@ impl Drop for Redis {
 macro_rules! get_db_and_cfs {
     ($self:expr $(, $cf:expr)*) => {{
         let db = $self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cfs = vec![

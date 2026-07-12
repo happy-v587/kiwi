@@ -40,7 +40,7 @@ impl Redis {
     /// Add one or more members to a set
     pub fn sadd(&self, key: &[u8], members: &[&[u8]]) -> Result<i32> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Filter duplicate members
@@ -68,12 +68,12 @@ impl Redis {
         let cf = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::SetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
         let base_meta_key = BaseMetaKey::new(key).encode()?;
         let meta_get = db.get_cf(&cf, &base_meta_key).context(RocksSnafu)?;
@@ -170,7 +170,7 @@ impl Redis {
     /// Get the number of members in a set
     pub fn scard(&self, key: &[u8]) -> Result<i32> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let base_meta_key = BaseMetaKey::new(key).encode()?;
@@ -178,7 +178,7 @@ impl Redis {
         let cf = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
 
         match db.get_cf(&cf, &base_meta_key).context(RocksSnafu)? {
@@ -212,7 +212,7 @@ impl Redis {
     /// Get all the members in a set
     pub fn smembers(&self, key: &[u8]) -> Result<Vec<String>> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let base_meta_key = BaseMetaKey::new(key).encode()?;
@@ -220,12 +220,12 @@ impl Redis {
         let cf_meta = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::SetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Read meta
@@ -276,18 +276,18 @@ impl Redis {
     /// Check if member is a member of the set stored at key
     pub fn sismember(&self, key: &[u8], member: &[u8]) -> Result<bool> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_meta = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::SetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Read meta
@@ -326,7 +326,7 @@ impl Redis {
     /// Get random members from a set
     pub fn srandmember(&self, key: &[u8], count: Option<i32>) -> Result<Vec<String>> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let base_meta_key = BaseMetaKey::new(key).encode()?;
@@ -334,12 +334,12 @@ impl Redis {
         let cf_meta = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::SetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Read meta
@@ -448,7 +448,7 @@ impl Redis {
         }
 
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Lock the key for atomic read-modify-write
@@ -460,12 +460,12 @@ impl Redis {
         let cf_meta = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::SetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Read meta
@@ -538,7 +538,7 @@ impl Redis {
     /// Remove and return random members from a set
     pub fn spop(&self, key: &[u8], count: Option<i32>) -> Result<Vec<String>> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Lock the key for atomic read-modify-write
@@ -550,12 +550,12 @@ impl Redis {
         let cf_meta = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::SetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Read meta
@@ -684,7 +684,7 @@ impl Redis {
     /// Move member from source set to destination set
     pub fn smove(&self, source: &[u8], destination: &[u8], member: &[u8]) -> Result<bool> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let source_meta_key = BaseMetaKey::new(source).encode()?;
@@ -693,12 +693,12 @@ impl Redis {
         let cf_meta = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::SetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Lock both keys to ensure atomicity (lock in consistent order to avoid deadlock)
@@ -1962,7 +1962,7 @@ impl Redis {
         }
 
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let mut result = Vec::new();
@@ -1974,12 +1974,12 @@ impl Redis {
         let cf_meta = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::SetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Read meta for first key
@@ -2052,7 +2052,7 @@ impl Redis {
         }
 
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let mut result = Vec::new();
@@ -2065,12 +2065,12 @@ impl Redis {
         let cf_meta = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
         let _cf_data =
             self.get_cf_handle(ColumnFamilyIndex::SetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Find the smallest set to optimize intersection
@@ -2149,13 +2149,13 @@ impl Redis {
         }
 
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let cf_meta = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
 
         // Use HashSet to ensure uniqueness
@@ -2245,7 +2245,7 @@ impl Redis {
     /// destination is empty or partially written.
     fn clear_and_store_set(&self, destination: &[u8], members: &[String]) -> Result<i32> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         // Lock the key for atomic read-modify-write
@@ -2255,12 +2255,12 @@ impl Redis {
         let cf_meta = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::SetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Clear the destination key first (if it exists)
@@ -2368,7 +2368,7 @@ impl Redis {
         count: Option<usize>,
     ) -> Result<(u64, Vec<String>)> {
         let db = self.db.as_ref().context(OptionNoneSnafu {
-            message: "db is not initialized".to_string(),
+            message: error_catalog::DB_NOT_INITIALIZED.to_string(),
         })?;
 
         let base_meta_key = BaseMetaKey::new(key).encode()?;
@@ -2376,12 +2376,12 @@ impl Redis {
         let cf_meta = self
             .get_cf_handle(ColumnFamilyIndex::MetaCF)
             .context(OptionNoneSnafu {
-                message: "cf is not initialized".to_string(),
+                message: error_catalog::CF_NOT_INITIALIZED.to_string(),
             })?;
         let cf_data =
             self.get_cf_handle(ColumnFamilyIndex::SetsDataCF)
                 .context(OptionNoneSnafu {
-                    message: "cf data is not initialized".to_string(),
+                    message: error_catalog::CF_DATA_NOT_INITIALIZED.to_string(),
                 })?;
 
         // Read meta

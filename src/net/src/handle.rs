@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use client::Client;
+use cmd::ClientExt;
 use cmd::CmdFlags;
 use cmd::table::CmdTable;
 use executor::{CmdExecution, CmdExecutor};
@@ -99,7 +100,7 @@ async fn handle_command(
     if !client.is_authenticated() {
         if let Some(cmd) = cmd_table.get(&cmd_name) {
             if !cmd.has_flag(CmdFlags::NO_AUTH) {
-                client.set_reply(RespData::Error("NOAUTH Authentication required.".into()));
+                client.set_error(error_catalog::NOAUTH);
                 return;
             }
         }
@@ -114,8 +115,7 @@ async fn handle_command(
         executor.execute(exec).await;
     } else {
         // Command not found, set an error reply
-        let err_msg = format!("ERR unknown command `{cmd_name}`");
-        client.set_reply(RespData::Error(err_msg.into()));
+        client.set_error(error_catalog::unknown_command_name(&cmd_name));
     }
 }
 

@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -80,14 +80,7 @@ impl Cmd for GetsetCmd {
                 };
                 client.set_reply(reply);
             }
-            Err(e) => match e {
-                storage::error::Error::RedisErr { ref message, .. } => {
-                    client.set_reply(RespData::Error(message.clone().into()));
-                }
-                _ => {
-                    client.set_reply(RespData::Error(format!("ERR {e}").into()));
-                }
-            },
+            Err(e) => client.set_storage_error(&e),
         }
     }
 }

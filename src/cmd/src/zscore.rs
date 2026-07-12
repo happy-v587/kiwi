@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -53,11 +53,7 @@ impl Cmd for ZscoreCmd {
 
         // Validate argument count (must be exactly 3: command + key + member)
         if argv.len() != 3 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'zscore' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("zscore"));
             return false;
         }
 
@@ -85,7 +81,7 @@ impl Cmd for ZscoreCmd {
                 client.set_reply(RespData::BulkString(None));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }

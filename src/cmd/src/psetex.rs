@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -74,22 +74,20 @@ impl Cmd for PsetexCmd {
         let milliseconds = match String::from_utf8_lossy(&argv[2]).parse::<i64>() {
             Ok(n) => n,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range".into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
 
         // Validate milliseconds - must be positive
         if milliseconds <= 0 {
-            client.set_reply(RespData::Error("ERR invalid expire time in psetex".into()));
+            client.set_error(error_catalog::INVALID_EXPIRE_TIME_PSETEX);
             return;
         }
 
         // Check TTL upper limit to prevent overflow
         if milliseconds > i64::MAX / 1_000 {
-            client.set_reply(RespData::Error("ERR invalid expire time in psetex".into()));
+            client.set_error(error_catalog::INVALID_EXPIRE_TIME_PSETEX);
             return;
         }
 
@@ -101,15 +99,7 @@ impl Cmd for PsetexCmd {
             Ok(()) => {
                 client.set_reply(RespData::SimpleString("OK".into()));
             }
-            Err(e) => match e {
-                storage::error::Error::RedisErr { ref message, .. } => {
-                    // RedisErr already contains the formatted message
-                    client.set_reply(RespData::Error(message.clone().into()));
-                }
-                _ => {
-                    client.set_reply(RespData::Error(format!("ERR {e}").into()));
-                }
-            },
+            Err(e) => client.set_storage_error(&e),
         }
     }
 }

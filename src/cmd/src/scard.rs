@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -68,7 +68,7 @@ impl Cmd for ScardCmd {
                 if e.to_string().contains("key not found") {
                     client.set_reply(RespData::Integer(0));
                 } else {
-                    client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                    client.set_storage_error(&e);
                 }
             }
         }

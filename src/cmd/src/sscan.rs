@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -69,7 +69,7 @@ impl Cmd for SscanCmd {
         let cursor = match cursor_str.parse::<u64>() {
             Ok(c) => c,
             Err(_) => {
-                client.set_reply(RespData::Error("ERR invalid cursor".into()));
+                client.set_error(error_catalog::INVALID_CURSOR);
                 return;
             }
         };
@@ -87,7 +87,7 @@ impl Cmd for SscanCmd {
                     i += 2;
                 }
                 "MATCH" => {
-                    client.set_reply(RespData::Error("ERR syntax error".into()));
+                    client.set_error(error_catalog::SYNTAX_ERROR);
                     return;
                 }
                 "COUNT" if i + 1 < argv.len() => {
@@ -97,19 +97,17 @@ impl Cmd for SscanCmd {
                             i += 2;
                         }
                         _ => {
-                            client.set_reply(RespData::Error(
-                                "ERR value is not an integer or out of range".into(),
-                            ));
+                            client.set_error(error_catalog::VALUE_NOT_INTEGER);
                             return;
                         }
                     }
                 }
                 "COUNT" => {
-                    client.set_reply(RespData::Error("ERR syntax error".into()));
+                    client.set_error(error_catalog::SYNTAX_ERROR);
                     return;
                 }
                 _ => {
-                    client.set_reply(RespData::Error("ERR syntax error".into()));
+                    client.set_error(error_catalog::SYNTAX_ERROR);
                     return;
                 }
             }
@@ -134,7 +132,7 @@ impl Cmd for SscanCmd {
                 client.set_reply(RespData::Array(Some(response)));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }

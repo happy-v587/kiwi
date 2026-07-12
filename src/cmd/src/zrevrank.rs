@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 use client::Client;
 use resp::RespData;
@@ -66,7 +66,7 @@ impl Cmd for ZrevrankCmd {
                 None => client.set_reply(RespData::Null),
             },
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }

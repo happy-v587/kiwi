@@ -271,7 +271,7 @@ impl CommandPipeline {
                 for command in batch.commands {
                     let _ = command
                         .response_tx
-                        .send(RespData::Error("ERR server overloaded".into()));
+                        .send(RespData::error(error_catalog::SERVER_OVERLOADED));
                 }
                 return;
             }
@@ -321,7 +321,7 @@ impl CommandPipeline {
         // Parse command from RespData
         if let RespData::Array(Some(params)) = data {
             if params.is_empty() {
-                return RespData::Error("ERR empty command".into());
+                return RespData::error(error_catalog::EMPTY_COMMAND);
             }
 
             if let RespData::BulkString(Some(cmd_name)) = &params[0] {
@@ -353,11 +353,10 @@ impl CommandPipeline {
                 executor.execute(exec).await;
                 client.take_reply()
             } else {
-                let err_msg = format!("ERR unknown command `{cmd_name}`");
-                RespData::Error(err_msg.into())
+                RespData::error(error_catalog::unknown_command_name(&cmd_name))
             }
         } else {
-            RespData::Error("ERR invalid command format".into())
+            RespData::error(error_catalog::INVALID_COMMAND_FORMAT)
         }
     }
 

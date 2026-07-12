@@ -284,7 +284,7 @@ impl ProtocolNegotiator {
             RespData::Boolean(b) => RespData::Integer(if *b { 1 } else { 0 }),
             RespData::Double(d) => RespData::BulkString(Some(Bytes::from(d.to_string()))),
             RespData::BigNumber(bytes) => RespData::BulkString(Some(bytes.clone())),
-            RespData::BulkError(bytes) => RespData::Error(bytes.clone()),
+            RespData::BulkError(bytes) => RespData::error(bytes.clone()),
             RespData::VerbatimString { data, .. } => RespData::BulkString(Some(data.clone())),
             RespData::Map(pairs) => {
                 // Convert map to array of alternating key-value pairs

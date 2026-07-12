@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -62,11 +62,7 @@ impl Cmd for MsetnxCmd {
 
         // len must be odd (cmd + pairs), and at least 3
         if argv.len() < 3 || argv.len().is_multiple_of(2) {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'msetnx' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("msetnx"));
             return false;
         }
 
@@ -92,7 +88,7 @@ impl Cmd for MsetnxCmd {
         match storage.msetnx(&kvs) {
             Ok(true) => client.set_reply(RespData::Integer(1)),
             Ok(false) => client.set_reply(RespData::Integer(0)),
-            Err(e) => client.set_reply(RespData::Error(format!("ERR {e}").into())),
+            Err(e) => client.set_storage_error(&e),
         }
     }
 }

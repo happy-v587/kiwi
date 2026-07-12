@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -63,16 +63,14 @@ impl Cmd for SetexCmd {
         let seconds = match String::from_utf8_lossy(&argv[2]).parse::<i64>() {
             Ok(n) => n,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range".into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
 
         // Validate seconds - must be positive
         if seconds <= 0 {
-            client.set_reply(RespData::Error("ERR invalid expire time in setex".into()));
+            client.set_error(error_catalog::INVALID_EXPIRE_TIME);
             return;
         }
 
@@ -84,15 +82,7 @@ impl Cmd for SetexCmd {
             Ok(()) => {
                 client.set_reply(RespData::SimpleString("OK".into()));
             }
-            Err(e) => match e {
-                storage::error::Error::RedisErr { ref message, .. } => {
-                    // RedisErr already contains the formatted message
-                    client.set_reply(RespData::Error(message.clone().into()));
-                }
-                _ => {
-                    client.set_reply(RespData::Error(format!("ERR {e}").into()));
-                }
-            },
+            Err(e) => client.set_storage_error(&e),
         }
     }
 }

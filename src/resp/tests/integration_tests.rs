@@ -180,7 +180,7 @@ fn test_resp3_backward_compatibility() {
     // Test that RESP2 data works correctly with RESP3 parser/encoder
     let resp2_data = vec![
         RespData::SimpleString(Bytes::from("OK")),
-        RespData::Error(Bytes::from("ERR something went wrong")),
+        RespData::error(Bytes::from("ERR something went wrong")),
         RespData::Integer(42),
         RespData::BulkString(Some(Bytes::from("hello world"))),
         RespData::BulkString(None),
@@ -418,7 +418,7 @@ fn test_resp3_to_resp2_conversion() {
         ),
         (
             RespData::BulkError(Bytes::from("ERR")),
-            RespData::Error(Bytes::from("ERR")),
+            RespData::error(Bytes::from("ERR")),
         ),
         (
             RespData::VerbatimString {

@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 use client::Client;
 use resp::RespData;
@@ -57,11 +57,7 @@ impl Cmd for ZinterstoreCmd {
         let argv = client.argv();
 
         if argv.len() < 3 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'zinterstore' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("zinterstore"));
             return;
         }
 
@@ -72,15 +68,13 @@ impl Cmd for ZinterstoreCmd {
         let numkeys = match numkeys_str.parse::<usize>() {
             Ok(n) if n > 0 => n,
             _ => {
-                client.set_reply(RespData::Error(
-                    "ERR numkeys should be greater than 0".to_string().into(),
-                ));
+                client.set_error(error_catalog::ZSTORE_NUMKEYS_GT_ZERO);
                 return;
             }
         };
 
         if argv.len() < 3 + numkeys {
-            client.set_reply(RespData::Error("ERR syntax error".to_string().into()));
+            client.set_error(error_catalog::SYNTAX_ERROR);
             return;
         }
 
@@ -99,7 +93,7 @@ impl Cmd for ZinterstoreCmd {
                 "WEIGHTS" => {
                     idx += 1;
                     if idx + numkeys > argv.len() {
-                        client.set_reply(RespData::Error("ERR syntax error".to_string().into()));
+                        client.set_error(error_catalog::SYNTAX_ERROR);
                         return;
                     }
 
@@ -108,9 +102,7 @@ impl Cmd for ZinterstoreCmd {
                         match weight_str.parse::<f64>() {
                             Ok(w) => weights.push(w),
                             Err(_) => {
-                                client.set_reply(RespData::Error(
-                                    "ERR weight value is not a float".to_string().into(),
-                                ));
+                                client.set_error(error_catalog::ZSTORE_WEIGHT_NOT_FLOAT);
                                 return;
                             }
                         }
@@ -120,19 +112,19 @@ impl Cmd for ZinterstoreCmd {
                 "AGGREGATE" => {
                     idx += 1;
                     if idx >= argv.len() {
-                        client.set_reply(RespData::Error("ERR syntax error".to_string().into()));
+                        client.set_error(error_catalog::SYNTAX_ERROR);
                         return;
                     }
 
                     aggregate = String::from_utf8_lossy(&argv[idx]).to_uppercase();
                     if aggregate != "SUM" && aggregate != "MIN" && aggregate != "MAX" {
-                        client.set_reply(RespData::Error("ERR syntax error".to_string().into()));
+                        client.set_error(error_catalog::SYNTAX_ERROR);
                         return;
                     }
                     idx += 1;
                 }
                 _ => {
-                    client.set_reply(RespData::Error("ERR syntax error".to_string().into()));
+                    client.set_error(error_catalog::SYNTAX_ERROR);
                     return;
                 }
             }
@@ -145,7 +137,7 @@ impl Cmd for ZinterstoreCmd {
                 client.set_reply(RespData::Integer(count as i64));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }

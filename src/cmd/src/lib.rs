@@ -119,6 +119,33 @@ use log::debug;
 use resp::RespData;
 use storage::storage::Storage;
 
+/// Extension trait for setting RESP error replies from storage errors.
+pub trait ClientExt {
+    /// Set the client reply to a RESP error derived from a storage error.
+    ///
+    /// This is the preferred way for command implementations to forward
+    /// storage failures. It handles `ERR` / `WRONGTYPE` prefixing and
+    /// sanitizes internal errors automatically.
+    fn set_storage_error(&self, err: &storage::error::Error);
+
+    /// Set the client reply to a RESP error with the given message.
+    ///
+    /// `msg` may be a catalog constant (`error_catalog::SYNTAX_ERROR`), a
+    /// catalog helper returning `String` (`error_catalog::wrong_number("GET")`),
+    /// or any other value convertible to [`Bytes`].
+    fn set_error<M: Into<bytes::Bytes>>(&self, msg: M);
+}
+
+impl ClientExt for Client {
+    fn set_storage_error(&self, err: &storage::error::Error) {
+        self.set_reply(RespData::error(err.to_resp_error()));
+    }
+
+    fn set_error<M: Into<bytes::Bytes>>(&self, msg: M) {
+        self.set_reply(RespData::error(msg));
+    }
+}
+
 pub use auth::RequirepassProvider;
 
 bitflags! {
@@ -193,13 +220,7 @@ pub trait Cmd: Send + Sync {
     fn execute(&self, client: &Client, storage: Arc<Storage>) {
         debug!("execute command: {:?}", client.cmd_name());
         if !self.check_arg(client.argv().len()) {
-            client.set_reply(RespData::Error(
-                format!(
-                    "ERR wrong number of arguments for '{}' command",
-                    String::from_utf8_lossy(client.cmd_name().as_slice()),
-                )
-                .into(),
-            ));
+            client.set_error(error_catalog::wrong_number(self.name()));
             return;
         }
         if self.do_initial(client) {
@@ -318,19 +339,15 @@ impl Cmd for BaseCmdGroup {
 
     fn do_cmd(&self, client: &Client, storage: Arc<Storage>) {
         if client.argv().len() < 2 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::WRONG_NUMBER_GENERIC);
             return;
         }
         let sub_cmd_name = String::from_utf8_lossy(&client.argv()[1]).to_lowercase();
         if let Some(sub_cmd) = self.sub_cmds.get(&sub_cmd_name) {
             sub_cmd.execute(client, storage);
         } else {
-            let err_msg = format!("ERR unknown command '{} {}'", self.name(), sub_cmd_name);
-            client.set_reply(RespData::Error(err_msg.into()));
+            let err_msg = error_catalog::unknown_command(self.name(), &sub_cmd_name);
+            client.set_error(err_msg);
         }
     }
 

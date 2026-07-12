@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 use client::Client;
 use resp::RespData;
@@ -62,11 +62,7 @@ impl Cmd for ZrangeCmd {
         let start = match start_str.parse::<i64>() {
             Ok(s) => s,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range"
-                        .to_string()
-                        .into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
@@ -76,11 +72,7 @@ impl Cmd for ZrangeCmd {
         let stop = match stop_str.parse::<i64>() {
             Ok(s) => s,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range"
-                        .to_string()
-                        .into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
@@ -91,7 +83,7 @@ impl Cmd for ZrangeCmd {
             if option == "withscores" {
                 true
             } else {
-                client.set_reply(RespData::Error("ERR syntax error".to_string().into()));
+                client.set_error(error_catalog::SYNTAX_ERROR);
                 return;
             }
         } else {
@@ -109,7 +101,7 @@ impl Cmd for ZrangeCmd {
                 client.set_reply(RespData::Array(Some(resp_array)));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }

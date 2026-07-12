@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, BaseCmdGroup, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, BaseCmdGroup, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 pub fn new_client_group_cmd() -> BaseCmdGroup {
@@ -101,9 +101,7 @@ impl Cmd for CmdClientSetname {
     fn do_cmd(&self, client: &Client, _storage: Arc<Storage>) {
         let argv = client.argv();
         if argv.len() < 3 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments".to_string().into(),
-            ));
+            client.set_error(error_catalog::WRONG_NUMBER_GENERIC);
             return;
         }
         let new_name = argv[2].clone();

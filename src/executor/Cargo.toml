@@ -19,6 +19,7 @@ cmd = { path = "../cmd" }
 client = { path = "../client" }
 storage = { path = "../storage" }
 runtime = { path = "../common/runtime" }
+error-catalog = { path = "../common/error-catalog" }
 # raft = { path = "../raft" } # Temporarily disabled
 
 [lints]

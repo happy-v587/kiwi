@@ -18,9 +18,9 @@
 use std::sync::Arc;
 
 use client::Client;
+use cmd::ClientExt;
 use cmd::Cmd;
 use log::{error, info, warn};
-use resp::RespData;
 use storage::storage::Storage;
 use tokio::{sync::oneshot, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -93,7 +93,7 @@ impl CmdExecutor {
             error!("execute failed, CmdExecutor is closed");
             work.exec
                 .client
-                .set_reply(RespData::Error("ERR executor unavailable".into()));
+                .set_error(error_catalog::INTERNAL_SERVER_ERROR);
             return;
         }
 

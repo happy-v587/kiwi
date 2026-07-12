@@ -24,7 +24,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
 
 /// INFO command - Show server information including cluster status
 #[derive(Clone, Default)]
@@ -139,9 +139,7 @@ impl Cmd for ConfigCmd {
 
     fn do_cmd(&self, client: &Client, _storage: Arc<Storage>) {
         if client.argv().len() < 2 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'config' command".into(),
-            ));
+            client.set_error(error_catalog::wrong_number("config"));
             return;
         }
 
@@ -150,9 +148,7 @@ impl Cmd for ConfigCmd {
         match subcommand.as_str() {
             "get" => {
                 if client.argv().len() < 3 {
-                    client.set_reply(RespData::Error(
-                        "ERR wrong number of arguments for 'config get' command".into(),
-                    ));
+                    client.set_error(error_catalog::wrong_number("config get"));
                     return;
                 }
 
@@ -183,14 +179,10 @@ impl Cmd for ConfigCmd {
             }
             "set" => {
                 // For now, don't allow runtime configuration changes
-                client.set_reply(RespData::Error(
-                    "ERR runtime configuration changes not supported".into(),
-                ));
+                client.set_error(error_catalog::CONFIG_RUNTIME_CHANGES_NOT_SUPPORTED);
             }
             _ => {
-                client.set_reply(RespData::Error(
-                    format!("ERR unknown CONFIG subcommand '{}'", subcommand).into(),
-                ));
+                client.set_error(error_catalog::unknown_config_subcommand(&subcommand));
             }
         }
     }

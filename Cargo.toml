@@ -6,6 +6,7 @@ members = [
 	"src/kstd",
 	"src/common/macro",
 	"src/common/runtime",
+	"src/common/error-catalog",
 	"src/net",
 	"src/resp",
 	"src/server",
@@ -82,6 +83,7 @@ storage = { path = "src/storage" }
 kstd = { path = "src/kstd" }
 common-macro = { path = "src/common/macro" }
 runtime = { path = "src/common/runtime" }
+error-catalog = { path = "src/common/error-catalog" }
 net = { path = "src/net" }
 resp = { path = "src/resp" }
 server = { path = "src/server" }

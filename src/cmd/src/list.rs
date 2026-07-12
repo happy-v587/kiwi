@@ -25,7 +25,7 @@ use resp::RespData;
 use storage::BeforeOrAfter;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 /// LPUSH command - Insert all the specified values at the head of the list stored at key
@@ -67,7 +67,7 @@ impl Cmd for LPushCmd {
                 client.set_reply(RespData::Integer(length));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -112,7 +112,7 @@ impl Cmd for RPushCmd {
                 client.set_reply(RespData::Integer(length));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -158,9 +158,7 @@ impl Cmd for LPopCmd {
             match String::from_utf8_lossy(&client.argv()[2]).parse::<usize>() {
                 Ok(c) if c > 0 && c < MAX_SAFE_POP_COUNT => Some(c),
                 _ => {
-                    client.set_reply(RespData::Error(
-                        "ERR value is not an integer or out of range".into(),
-                    ));
+                    client.set_error(error_catalog::VALUE_NOT_INTEGER);
                     return;
                 }
             }
@@ -186,7 +184,7 @@ impl Cmd for LPopCmd {
                 client.set_reply(RespData::BulkString(None));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -230,9 +228,7 @@ impl Cmd for RPopCmd {
             match String::from_utf8_lossy(&client.argv()[2]).parse::<usize>() {
                 Ok(c) if c > 0 && c < MAX_SAFE_POP_COUNT => Some(c),
                 _ => {
-                    client.set_reply(RespData::Error(
-                        "ERR value is not an integer or out of range".into(),
-                    ));
+                    client.set_error(error_catalog::VALUE_NOT_INTEGER);
                     return;
                 }
             }
@@ -262,7 +258,7 @@ impl Cmd for RPopCmd {
                 client.set_reply(RespData::BulkString(None));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -306,7 +302,7 @@ impl Cmd for LLenCmd {
                 client.set_reply(RespData::Integer(length));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -349,9 +345,7 @@ impl Cmd for LIndexCmd {
         let index = match String::from_utf8_lossy(&client.argv()[2]).parse::<i64>() {
             Ok(idx) => idx,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range".into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
@@ -364,7 +358,7 @@ impl Cmd for LIndexCmd {
                 client.set_reply(RespData::BulkString(None));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -407,9 +401,7 @@ impl Cmd for LRangeCmd {
         let start = match String::from_utf8_lossy(&client.argv()[2]).parse::<i64>() {
             Ok(s) => s,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range".into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
@@ -417,9 +409,7 @@ impl Cmd for LRangeCmd {
         let stop = match String::from_utf8_lossy(&client.argv()[3]).parse::<i64>() {
             Ok(s) => s,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range".into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
@@ -433,7 +423,7 @@ impl Cmd for LRangeCmd {
                 client.set_reply(RespData::Array(Some(resp_values)));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -476,9 +466,7 @@ impl Cmd for LSetCmd {
         let index = match String::from_utf8_lossy(&client.argv()[2]).parse::<i64>() {
             Ok(idx) => idx,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range".into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
@@ -490,14 +478,7 @@ impl Cmd for LSetCmd {
                 client.set_reply(RespData::SimpleString("OK".into()));
             }
             Err(e) => {
-                let error_msg = if e.to_string().contains("not found") {
-                    "ERR no such key".to_string()
-                } else if e.to_string().contains("out of range") {
-                    "ERR index out of range".to_string()
-                } else {
-                    format!("ERR {e}")
-                };
-                client.set_reply(RespData::Error(error_msg.into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -540,9 +521,7 @@ impl Cmd for LTrimCmd {
         let start = match String::from_utf8_lossy(&client.argv()[2]).parse::<i64>() {
             Ok(s) => s,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range".into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
@@ -550,9 +529,7 @@ impl Cmd for LTrimCmd {
         let stop = match String::from_utf8_lossy(&client.argv()[3]).parse::<i64>() {
             Ok(s) => s,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range".into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
@@ -562,7 +539,7 @@ impl Cmd for LTrimCmd {
                 client.set_reply(RespData::SimpleString("OK".into()));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -605,9 +582,7 @@ impl Cmd for LRemCmd {
         let count = match String::from_utf8_lossy(&client.argv()[2]).parse::<i64>() {
             Ok(c) => c,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range".into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
@@ -619,7 +594,7 @@ impl Cmd for LRemCmd {
                 client.set_reply(RespData::Integer(removed_count));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -664,7 +639,7 @@ impl Cmd for LPushxCmd {
                 client.set_reply(RespData::Integer(length));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -709,7 +684,7 @@ impl Cmd for RPushxCmd {
                 client.set_reply(RespData::Integer(length));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -767,7 +742,7 @@ impl Cmd for LInsertCmd {
                 client.set_reply(RespData::Integer(length));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }
@@ -820,7 +795,7 @@ impl Cmd for RPoplpushCmd {
                 client.set_reply(RespData::BulkString(None));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }

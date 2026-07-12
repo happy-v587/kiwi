@@ -466,6 +466,7 @@ dependencies = [
  "bytes",
  "client",
  "conf",
+ "error-catalog",
  "log",
  "num-traits",
  "resp",
@@ -697,6 +698,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "error-catalog"
+version = "0.1.0"
+
+[[package]]
 name = "event-listener"
 version = "5.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -726,6 +731,7 @@ dependencies = [
  "client",
  "cmd",
  "env_logger",
+ "error-catalog",
  "log",
  "num_cpus",
  "resp",
@@ -1673,6 +1679,7 @@ dependencies = [
  "client",
  "cmd",
  "env_logger",
+ "error-catalog",
  "executor",
  "log",
  "parking_lot",
@@ -2617,6 +2624,7 @@ dependencies = [
  "conf",
  "crc16",
  "engine",
+ "error-catalog",
  "foyer",
  "kstd",
  "log",

@@ -22,7 +22,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
 pub struct HIncrByFloatCmd {
@@ -60,7 +60,7 @@ impl Cmd for HIncrByFloatCmd {
         let increment: f64 = match increment_str.parse() {
             Ok(n) => n,
             Err(_) => {
-                client.set_reply(RespData::Error("ERR value is not a valid float".into()));
+                client.set_error(error_catalog::VALUE_IS_NOT_VALID_FLOAT);
                 return;
             }
         };
@@ -72,7 +72,7 @@ impl Cmd for HIncrByFloatCmd {
                 ))));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {}", e).into()));
+                client.set_storage_error(&e);
             }
         }
     }

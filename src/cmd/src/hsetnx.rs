@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
 pub struct HSetNXCmd {
@@ -53,9 +53,7 @@ impl Cmd for HSetNXCmd {
     fn do_cmd(&self, client: &Client, storage: Arc<Storage>) {
         let argv = client.argv();
         if argv.len() != 4 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'hsetnx' command".into(),
-            ));
+            client.set_error(error_catalog::wrong_number("hsetnx"));
             return;
         }
         let key = &argv[1];
@@ -67,7 +65,7 @@ impl Cmd for HSetNXCmd {
                 client.set_reply(RespData::Integer(result as i64));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {}", e).into()));
+                client.set_storage_error(&e);
             }
         }
     }

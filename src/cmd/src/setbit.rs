@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -53,11 +53,7 @@ impl Cmd for SetbitCmd {
     fn do_initial(&self, client: &Client) -> bool {
         let argv = client.argv();
         if argv.len() != 4 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'setbit' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("setbit"));
             return false;
         }
 
@@ -76,9 +72,7 @@ impl Cmd for SetbitCmd {
         let offset: i64 = match String::from_utf8_lossy(&argv[2]).parse() {
             Ok(offset) => offset,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not an integer or out of range".into(),
-                ));
+                client.set_error(error_catalog::VALUE_NOT_INTEGER);
                 return;
             }
         };
@@ -87,9 +81,7 @@ impl Cmd for SetbitCmd {
         let value: i64 = match String::from_utf8_lossy(&argv[3]).parse() {
             Ok(value) => value,
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR bit is not an integer or out of range".into(),
-                ));
+                client.set_error(error_catalog::BIT_IS_NOT_INTEGER);
                 return;
             }
         };
@@ -98,17 +90,7 @@ impl Cmd for SetbitCmd {
             Ok(old_bit) => {
                 client.set_reply(RespData::Integer(old_bit));
             }
-            Err(e) => match e {
-                storage::error::Error::RedisErr { ref message, .. }
-                    if message.starts_with("WRONGTYPE") =>
-                {
-                    // RedisErr already contains the formatted message
-                    client.set_reply(RespData::Error(message.clone().into()));
-                }
-                _ => {
-                    client.set_reply(RespData::Error(format!("ERR {e}").into()));
-                }
-            },
+            Err(e) => client.set_storage_error(&e),
         }
     }
 }

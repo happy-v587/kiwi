@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -53,11 +53,7 @@ impl Cmd for ZincrbyCmd {
 
         // Validate argument count (must be exactly 4: command + key + increment + member)
         if argv.len() != 4 {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'zincrby' command"
-                    .to_string()
-                    .into(),
-            ));
+            client.set_error(error_catalog::wrong_number("zincrby"));
             return false;
         }
 
@@ -77,17 +73,13 @@ impl Cmd for ZincrbyCmd {
             Ok(inc) => {
                 // Check for valid float (not NaN or infinite)
                 if inc.is_nan() || inc.is_infinite() {
-                    client.set_reply(RespData::Error(
-                        "ERR value is not a valid float".to_string().into(),
-                    ));
+                    client.set_error(error_catalog::VALUE_IS_NOT_VALID_FLOAT);
                     return;
                 }
                 inc
             }
             Err(_) => {
-                client.set_reply(RespData::Error(
-                    "ERR value is not a valid float".to_string().into(),
-                ));
+                client.set_error(error_catalog::VALUE_IS_NOT_VALID_FLOAT);
                 return;
             }
         };
@@ -103,7 +95,7 @@ impl Cmd for ZincrbyCmd {
                 client.set_reply(RespData::BulkString(Some(new_score_bytes.into())));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }

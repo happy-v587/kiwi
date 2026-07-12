@@ -19,12 +19,13 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use client::Client;
-use resp::{CommandType, HelloAuthResult, RespCommand, RespData, RespError};
+use resp::{CommandType, HelloAuthResult, RespCommand, RespError};
 use storage::storage::Storage;
 use subtle::ConstantTimeEq;
 
 use crate::{
-    AclCategory, Cmd, CmdFlags, CmdMeta, RequirepassProvider, impl_cmd_clone_box, impl_cmd_meta,
+    AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, RequirepassProvider, impl_cmd_clone_box,
+    impl_cmd_meta,
 };
 
 #[derive(Clone)]
@@ -114,7 +115,7 @@ impl Cmd for HelloCmd {
                 client.set_authenticated(true);
                 client.set_reply(response);
             }
-            Err(err) => client.set_reply(RespData::Error(format_hello_error(err).into())),
+            Err(err) => client.set_error(format_hello_error(err)),
         }
     }
 }
@@ -136,6 +137,7 @@ fn format_hello_error(err: RespError) -> String {
 mod tests {
     use super::*;
     use client::StreamTrait;
+    use resp::RespData;
 
     struct TestStream;
 

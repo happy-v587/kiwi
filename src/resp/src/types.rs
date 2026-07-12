@@ -115,6 +115,11 @@ impl Default for RespData {
 }
 
 impl RespData {
+    /// Create a RESP error reply from any message that can become [`Bytes`].
+    pub fn error<M: Into<Bytes>>(msg: M) -> Self {
+        RespData::Error(msg.into())
+    }
+
     pub fn get_type(&self) -> RespType {
         match self {
             RespData::SimpleString(_) => RespType::SimpleString,

@@ -154,7 +154,7 @@ impl RespParse {
         let (input, _) = char('-')(input)?;
         let mut ter_parser = terminated(not_line_ending, line_ending);
         let (input, data) = ter_parser.parse(input)?;
-        Ok((input, RespData::Error(Bytes::copy_from_slice(data))))
+        Ok((input, RespData::error(Bytes::copy_from_slice(data))))
     }
 
     fn parse_integer(input: &[u8]) -> IResult<&[u8], RespData> {
@@ -535,7 +535,7 @@ mod tests {
         let res = parser.parse(Bytes::from("-Error message\r\n"));
         assert_eq!(
             res,
-            RespParseResult::Complete(RespData::Error(Bytes::from("Error message")))
+            RespParseResult::Complete(RespData::error(Bytes::from("Error message")))
         );
     }
 

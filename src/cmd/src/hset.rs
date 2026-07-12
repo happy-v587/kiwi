@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
 pub struct HSetCmd {
@@ -49,9 +49,7 @@ impl Cmd for HSetCmd {
     fn do_initial(&self, client: &Client) -> bool {
         let argv = client.argv();
         if argv.len() < 4 || !(argv.len() - 2).is_multiple_of(2) {
-            client.set_reply(RespData::Error(
-                "ERR wrong number of arguments for 'hset' command".into(),
-            ));
+            client.set_error(error_catalog::wrong_number("hset"));
             return false;
         }
         true
@@ -71,7 +69,7 @@ impl Cmd for HSetCmd {
                     total_added += added;
                 }
                 Err(e) => {
-                    client.set_reply(RespData::Error(format!("ERR {}", e).into()));
+                    client.set_storage_error(&e);
                     return;
                 }
             }

@@ -50,6 +50,9 @@ fmt:
 fmt-check:
 	@cargo fmt --manifest-path ./Cargo.toml --all -- --check
 
+error-catalog-check:
+	@python3 scripts/check-error-catalog.py
+
 lint:
 	@cargo clippy --manifest-path ./Cargo.toml --all-features --workspace -- -D warnings -D clippy::unwrap_used
 
@@ -72,7 +75,8 @@ help:
 	@echo "  clean         - Clean build artifacts"
 	@echo "  fmt           - Format code"
 	@echo "  fmt-check     - Check formatting (CI)"
+	@echo "  error-catalog-check - Check error catalog compliance (CI)"
 	@echo "  lint          - Run clippy (CI)"
 	@echo "  help          - Show this help"
 
-.PHONY: check build release run standalone cluster test clean fmt fmt-check lint help
+.PHONY: check build release run standalone cluster test clean fmt fmt-check error-catalog-check lint help

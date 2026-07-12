@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -60,13 +60,9 @@ impl Cmd for SrandmemberCmd {
 
         // Validate argument count (should be 2 or 3)
         if argv.len() > 3 {
-            client.set_reply(RespData::Error(
-                format!(
-                    "ERR wrong number of arguments for '{}' command",
-                    String::from_utf8_lossy(client.cmd_name().as_slice()),
-                )
-                .into(),
-            ));
+            client.set_error(error_catalog::wrong_number(String::from_utf8_lossy(
+                client.cmd_name().as_slice(),
+            )));
             return;
         }
 
@@ -75,11 +71,7 @@ impl Cmd for SrandmemberCmd {
             match String::from_utf8_lossy(&argv[2]).parse::<i32>() {
                 Ok(c) => Some(c),
                 Err(_) => {
-                    client.set_reply(RespData::Error(
-                        "ERR value is not an integer or out of range"
-                            .to_string()
-                            .into(),
-                    ));
+                    client.set_error(error_catalog::VALUE_NOT_INTEGER);
                     return;
                 }
             }
@@ -110,7 +102,7 @@ impl Cmd for SrandmemberCmd {
                 }
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }

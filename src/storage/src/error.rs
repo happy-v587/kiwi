@@ -19,7 +19,9 @@
 
 use std::io;
 
+use bytes::Bytes;
 use common_macro::stack_trace_debug;
+use error_catalog::{INTERNAL_SERVER_ERROR, ensure_err_prefix};
 use snafu::{Location, Snafu};
 
 use crate::storage::BgTask;
@@ -153,4 +155,25 @@ pub enum Error {
         #[snafu(implicit)]
         location: Location,
     },
+}
+
+impl Error {
+    /// Convert this storage error into a RESP-safe error string.
+    ///
+    /// The returned text is intended to be placed directly into
+    /// `RespData::Error(...)` and sent to the client. Redis-level semantic
+    /// messages that already carry a standard error class (`ERR`, `WRONGTYPE`,
+    /// etc.) are passed through verbatim; other messages are prefixed with
+    /// `ERR `. Internal failures are sanitized to a fixed message.
+    pub fn to_resp_error(&self) -> Bytes {
+        let msg = match self {
+            Error::RedisErr { message, .. } => ensure_err_prefix(message),
+            Error::InvalidFormat { message, .. }
+            | Error::InvalidArgument { message, .. }
+            | Error::Encoding { message, .. } => ensure_err_prefix(message),
+            Error::KeyNotFound { .. } => error_catalog::KEY_NOT_FOUND.to_string(),
+            _ => INTERNAL_SERVER_ERROR.to_string(),
+        };
+        msg.into()
+    }
 }

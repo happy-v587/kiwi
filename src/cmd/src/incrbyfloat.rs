@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{Cmd, CmdFlags, CmdMeta};
+use crate::{ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -61,16 +61,14 @@ impl Cmd for IncrbyFloatCmd {
         let incr: f64 = match String::from_utf8_lossy(value).to_string().parse() {
             Ok(v) => v,
             Err(_) => {
-                client.set_reply(RespData::Error("ERR value is not a valid float".into()));
+                client.set_error(error_catalog::VALUE_IS_NOT_VALID_FLOAT);
                 return;
             }
         };
 
         // Check for NaN or infinity in the increment
         if incr.is_nan() || incr.is_infinite() {
-            client.set_reply(RespData::Error(
-                "ERR increment would produce NaN or Infinity".into(),
-            ));
+            client.set_error(error_catalog::INCR_NAN_OR_INFINITY);
             return;
         }
 
@@ -86,7 +84,7 @@ impl Cmd for IncrbyFloatCmd {
                 client.set_reply(RespData::BulkString(Some(formatted.into())));
             }
             Err(e) => {
-                client.set_reply(RespData::Error(format!("ERR {e}").into()));
+                client.set_storage_error(&e);
             }
         }
     }

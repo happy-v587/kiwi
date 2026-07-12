@@ -47,5 +47,4 @@ engine.workspace = true
 foyer.workspace = true
 rand.workspace = true
 conf.workspace = true
-
-
+error-catalog.workspace = true
