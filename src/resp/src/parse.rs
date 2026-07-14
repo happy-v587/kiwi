@@ -30,7 +30,7 @@ use nom::{
 
 use crate::{
     command::{Command, RespCommand},
-    error::{RespError, RespResult},
+    error::{ParseError, ParseResult},
     types::{RespData, RespVersion},
 };
 
@@ -38,13 +38,13 @@ use crate::{
 pub enum RespParseResult {
     Complete(RespData),
     Incomplete,
-    Error(RespError),
+    Error(ParseError),
 }
 
 pub trait Parse {
     fn parse(&mut self, data: Bytes) -> RespParseResult;
 
-    fn next_command(&mut self) -> Option<RespResult<RespCommand>>;
+    fn next_command(&mut self) -> Option<ParseResult<RespCommand>>;
 
     fn reset(&mut self);
 }
@@ -52,7 +52,7 @@ pub trait Parse {
 pub struct RespParse {
     version: RespVersion,
     buffer: BytesMut,
-    commands: VecDeque<RespResult<RespCommand>>,
+    commands: VecDeque<ParseResult<RespCommand>>,
     is_pipeline: bool,
     version_detected: bool,
 }
@@ -475,7 +475,7 @@ impl RespParse {
             Err(nom::Err::Incomplete(_)) => RespParseResult::Incomplete,
             Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
                 let error_msg = format!("Parse error: {e:?}");
-                RespParseResult::Error(RespError::ParseError(error_msg))
+                RespParseResult::Error(ParseError::ParseError(error_msg))
             }
         }
     }
@@ -493,7 +493,7 @@ impl Parse for RespParse {
         self.process_buffer()
     }
 
-    fn next_command(&mut self) -> Option<RespResult<RespCommand>> {
+    fn next_command(&mut self) -> Option<ParseResult<RespCommand>> {
         self.commands.pop_front()
     }
 

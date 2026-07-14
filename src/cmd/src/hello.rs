@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use bytes::Bytes;
 use client::Client;
-use resp::{CommandType, HelloAuthResult, RespCommand, RespError};
+use resp::{CommandType, HelloAuthResult, HelloError, RespCommand};
 use storage::storage::Storage;
 use subtle::ConstantTimeEq;
 
@@ -120,16 +120,17 @@ impl Cmd for HelloCmd {
     }
 }
 
-/// Format a RESP error from HELLO negotiation for the client.
-///
-/// `RespError::InvalidData` is used to carry the raw Redis error message, so
-/// strip the Display prefix and any leading `-` that the encoder will add.
-fn format_hello_error(err: RespError) -> String {
-    let raw = match err {
-        RespError::InvalidData(msg) => msg,
-        other => other.to_string(),
-    };
-    raw.trim_start_matches('-').to_string()
+/// Temporarily preserve HELLO's existing Redis-compatible replies while the
+/// command error model is introduced in the following migration step.
+fn format_hello_error(err: HelloError) -> String {
+    match err {
+        HelloError::InvalidArgument(message) => error_catalog::ensure_err_prefix(message),
+        HelloError::WrongPassword => error_catalog::WRONGPASS.to_string(),
+        HelloError::NoPasswordConfigured => {
+            error_catalog::HELLO_AUTH_NO_PASSWORD_CONFIGURED.to_string()
+        }
+        HelloError::AuthenticationRequired => error_catalog::HELLO_AUTH_REQUIRED.to_string(),
+    }
 }
 
 #[allow(clippy::unwrap_used)]

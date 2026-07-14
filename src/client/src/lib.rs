@@ -18,7 +18,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use resp::{ProtocolNegotiator, RespCommand, RespData, RespResult};
+use resp::{HelloResult, ProtocolNegotiator, RespCommand, RespData};
 use tokio::sync::Mutex;
 
 #[async_trait]
@@ -156,7 +156,7 @@ impl Client {
         already_authenticated: bool,
         authentication_required: bool,
         authenticate: F,
-    ) -> RespResult<(RespData, Option<String>)>
+    ) -> HelloResult<(RespData, Option<String>)>
     where
         F: FnMut(&[u8], &[u8]) -> resp::HelloAuthResult,
     {

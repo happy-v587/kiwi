@@ -20,7 +20,7 @@ use std::str::FromStr;
 
 use bytes::Bytes;
 
-use crate::error::RespError;
+use crate::error::ParseError;
 use crate::types::RespData;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -176,7 +176,7 @@ pub enum CommandType {
 }
 
 impl FromStr for CommandType {
-    type Err = RespError;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_uppercase().as_str() {
@@ -524,15 +524,15 @@ impl RespCommand {
 }
 
 pub trait Command {
-    fn to_command(&self) -> Result<RespCommand, RespError>;
+    fn to_command(&self) -> Result<RespCommand, ParseError>;
 }
 
 impl Command for RespData {
-    fn to_command(&self) -> Result<RespCommand, RespError> {
+    fn to_command(&self) -> Result<RespCommand, ParseError> {
         match self {
             RespData::Array(Some(array)) if !array.is_empty() => {
                 let command_name = array[0].as_string().ok_or_else(|| {
-                    RespError::InvalidData("Command name must be a string".to_string())
+                    ParseError::InvalidData("Command name must be a string".to_string())
                 })?;
 
                 let command_type =
@@ -543,7 +543,7 @@ impl Command for RespData {
                     .skip(1)
                     .map(|data| {
                         data.as_bytes().ok_or_else(|| {
-                            RespError::InvalidData(
+                            ParseError::InvalidData(
                                 "Command argument must be convertible to bytes".to_string(),
                             )
                         })
@@ -552,7 +552,9 @@ impl Command for RespData {
 
                 Ok(RespCommand::new(command_type, args, false))
             }
-            _ => Err(RespError::InvalidData("Invalid command format".to_string())),
+            _ => Err(ParseError::InvalidData(
+                "Invalid command format".to_string(),
+            )),
         }
     }
 }

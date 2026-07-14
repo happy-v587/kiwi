@@ -24,8 +24,8 @@ pub mod types;
 
 pub use command::{Command, CommandType, RespCommand};
 pub use encode::RespEncode;
-pub use error::{RespError, RespResult};
-pub use negotiation::{HelloAuthResult, ProtocolNegotiator};
+pub use error::{ParseError, ParseResult};
+pub use negotiation::{HelloAuthResult, HelloError, HelloResult, ProtocolNegotiator};
 pub use parse::{Parse, RespParse, RespParseResult};
 pub use types::{RespData, RespType, RespVersion};
 

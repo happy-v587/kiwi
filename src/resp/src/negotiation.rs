@@ -18,10 +18,10 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
+use thiserror::Error;
 
 use crate::{
     command::RespCommand,
-    error::{RespError, RespResult},
     types::{RespData, RespVersion},
 };
 
@@ -35,6 +35,27 @@ pub enum HelloAuthResult {
     /// No requirepass is configured; AUTH clause is not allowed.
     NoPasswordConfigured,
 }
+
+/// Semantic failures while processing the `HELLO` command.
+///
+/// These are command errors, not RESP wire parsing errors. The command layer
+/// maps them to Redis-compatible client replies.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum HelloError {
+    #[error("invalid HELLO argument: {0}")]
+    InvalidArgument(String),
+
+    #[error("HELLO authentication failed")]
+    WrongPassword,
+
+    #[error("HELLO AUTH used without configured password")]
+    NoPasswordConfigured,
+
+    #[error("HELLO requires authentication")]
+    AuthenticationRequired,
+}
+
+pub type HelloResult<T> = Result<T, HelloError>;
 
 /// Protocol negotiation handler for RESP3
 #[derive(Clone)]
@@ -82,7 +103,7 @@ impl ProtocolNegotiator {
         already_authenticated: bool,
         authentication_required: bool,
         mut authenticate: F,
-    ) -> RespResult<(RespData, Option<String>)>
+    ) -> HelloResult<(RespData, Option<String>)>
     where
         F: FnMut(&[u8], &[u8]) -> HelloAuthResult,
     {
@@ -92,7 +113,7 @@ impl ProtocolNegotiator {
         // Parse protocol version if the first arg is "2" or "3"
         let requested_version = if let Some(first) = args_iter.peek() {
             let s = std::str::from_utf8(first)
-                .map_err(|_| RespError::InvalidData("Invalid protocol version".to_string()))?;
+                .map_err(|_| HelloError::InvalidArgument("Invalid protocol version".to_string()))?;
             match s {
                 "2" => {
                     args_iter.next();
@@ -119,46 +140,42 @@ impl ProtocolNegotiator {
         // Parse additional arguments (AUTH, SETNAME, etc.)
         while let Some(arg) = args_iter.next() {
             let arg_str = std::str::from_utf8(arg)
-                .map_err(|_| RespError::InvalidData("Invalid argument".to_string()))?
+                .map_err(|_| HelloError::InvalidArgument("Invalid argument".to_string()))?
                 .to_uppercase();
 
             match arg_str.as_str() {
                 "AUTH" => {
                     // AUTH username password
                     let username = args_iter.next().ok_or_else(|| {
-                        RespError::InvalidData("AUTH requires username".to_string())
+                        HelloError::InvalidArgument("AUTH requires username".to_string())
                     })?;
                     let password = args_iter.next().ok_or_else(|| {
-                        RespError::InvalidData("AUTH requires password".to_string())
+                        HelloError::InvalidArgument("AUTH requires password".to_string())
                     })?;
 
                     auth_attempted = true;
                     match authenticate(username.as_ref(), password.as_ref()) {
                         HelloAuthResult::Authenticated => {}
                         HelloAuthResult::WrongPassword => {
-                            return Err(RespError::InvalidData(
-                                "WRONGPASS invalid username-password pair or user is disabled."
-                                    .to_string(),
-                            ));
+                            return Err(HelloError::WrongPassword);
                         }
                         HelloAuthResult::NoPasswordConfigured => {
-                            return Err(RespError::InvalidData(
-                                "ERR HELLO AUTH called without any password configured".to_string(),
-                            ));
+                            return Err(HelloError::NoPasswordConfigured);
                         }
                     }
                 }
                 "SETNAME" => {
                     // SETNAME clientname
                     let client_name = args_iter.next().ok_or_else(|| {
-                        RespError::InvalidData("SETNAME requires client name".to_string())
+                        HelloError::InvalidArgument("SETNAME requires client name".to_string())
                     })?;
-                    let client_name_str = std::str::from_utf8(client_name)
-                        .map_err(|_| RespError::InvalidData("Invalid client name".to_string()))?;
+                    let client_name_str = std::str::from_utf8(client_name).map_err(|_| {
+                        HelloError::InvalidArgument("Invalid client name".to_string())
+                    })?;
                     pending_set_name = Some(client_name_str.to_string());
                 }
                 _ => {
-                    return Err(RespError::InvalidData(format!(
+                    return Err(HelloError::InvalidArgument(format!(
                         "Unknown HELLO argument: {}",
                         arg_str
                     )));
@@ -171,9 +188,7 @@ impl ProtocolNegotiator {
         // succeeds satisfies this, as does a connection that was already
         // authenticated.
         if authentication_required && !auth_attempted && !already_authenticated {
-            return Err(RespError::InvalidData(
-                "NOAUTH HELLO must be called with the client already authenticated, otherwise the HELLO <proto> AUTH <user> <pass> option can be used to authenticate the client and select the RESP protocol version at the same time".to_string(),
-            ));
+            return Err(HelloError::AuthenticationRequired);
         }
 
         // All checks passed: commit the negotiated version and persist any SETNAME
@@ -197,7 +212,7 @@ impl ProtocolNegotiator {
         }
     }
 
-    fn build_resp2_hello_response(&self) -> RespResult<RespData> {
+    fn build_resp2_hello_response(&self) -> HelloResult<RespData> {
         // RESP2 response format (array of key-value pairs)
         let response = vec![
             RespData::BulkString(Some(Bytes::from("server"))),
@@ -219,7 +234,7 @@ impl ProtocolNegotiator {
         Ok(RespData::Array(Some(response)))
     }
 
-    fn build_resp3_hello_response(&self) -> RespResult<RespData> {
+    fn build_resp3_hello_response(&self) -> HelloResult<RespData> {
         // RESP3 response format (map)
         let pairs = vec![
             (
@@ -371,10 +386,10 @@ mod tests {
         });
 
         assert!(result.is_err());
-        let err = result
-            .expect_err("handle_hello should fail for unauthenticated client")
-            .to_string();
-        assert!(err.contains("NOAUTH"), "expected NOAUTH error, got {err}");
+        assert_eq!(
+            result.expect_err("handle_hello should fail for unauthenticated client"),
+            HelloError::AuthenticationRequired
+        );
         // Version must not switch when the command is rejected.
         assert_eq!(negotiator.current_version(), RespVersion::RESP2);
     }

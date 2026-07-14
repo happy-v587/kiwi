@@ -84,6 +84,9 @@ pub const INVALID_COMMAND_FORMAT: &str = "ERR invalid command format";
 // Auth / admin errors
 pub const AUTH_NO_PASSWORD_CONFIGURED: &str = "ERR AUTH called without any password configured";
 pub const AUTH_ACL_NOT_SUPPORTED: &str = "ERR ACL authentication is not supported";
+pub const HELLO_AUTH_NO_PASSWORD_CONFIGURED: &str =
+    "ERR HELLO AUTH called without any password configured";
+pub const HELLO_AUTH_REQUIRED: &str = "NOAUTH HELLO must be called with the client already authenticated, otherwise the HELLO <proto> AUTH <user> <pass> option can be used to authenticate the client and select the RESP protocol version at the same time";
 pub const CONFIG_RUNTIME_CHANGES_NOT_SUPPORTED: &str =
     "ERR runtime configuration changes not supported";
 

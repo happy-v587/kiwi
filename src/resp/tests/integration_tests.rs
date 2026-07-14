@@ -21,7 +21,7 @@ use bytes::Bytes;
 use resp::{
     command::{CommandType, RespCommand},
     encode::{RespEncode, RespEncoder},
-    negotiation::{HelloAuthResult, ProtocolNegotiator},
+    negotiation::{HelloAuthResult, HelloError, ProtocolNegotiator},
     parse::{Parse, RespParse, RespParseResult},
     types::{RespData, RespVersion},
 };
@@ -300,8 +300,7 @@ fn test_protocol_negotiation_with_wrong_password() {
     let result =
         negotiator.handle_hello(&command, false, true, |_, _| HelloAuthResult::WrongPassword);
     assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(err.contains("WRONGPASS"), "expected WRONGPASS, got {err}");
+    assert_eq!(result.unwrap_err(), HelloError::WrongPassword);
 }
 
 #[test]
@@ -322,11 +321,7 @@ fn test_protocol_negotiation_with_no_password_configured() {
         HelloAuthResult::NoPasswordConfigured
     });
     assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(
-        err.contains("HELLO AUTH called without any password configured"),
-        "expected no-password-configured error, got {err}"
-    );
+    assert_eq!(result.unwrap_err(), HelloError::NoPasswordConfigured);
 }
 
 #[test]
@@ -392,8 +387,7 @@ fn test_protocol_negotiation_noauth() {
     });
 
     assert!(result.is_err());
-    let err = result.unwrap_err().to_string();
-    assert!(err.contains("NOAUTH"), "expected NOAUTH error, got {err}");
+    assert_eq!(result.unwrap_err(), HelloError::AuthenticationRequired);
     // The connection must stay on RESP2 since the command failed.
     assert_eq!(negotiator.current_version(), RespVersion::RESP2);
 }

@@ -18,7 +18,7 @@
 use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
-pub enum RespError {
+pub enum ParseError {
     #[error("Invalid RESP data: {0}")]
     InvalidData(String),
 
@@ -39,21 +39,16 @@ pub enum RespError {
 
     #[error("Unsupported RESP type")]
     UnsupportedType,
-
-    #[error("Unknown command: {0}")]
-    UnknownCommand(String),
-
-    #[error("Unknown subcommand: {0}")]
-    UnknownSubCommand(String),
-
-    #[error("Syntax error: {0}")]
-    SyntaxError(String),
-
-    #[error("Wrong number of arguments: {0}")]
-    WrongNumberOfArguments(String),
-
-    #[error("Unknown error: {0}")]
-    UnknownError(String),
 }
 
-pub type RespResult<T> = Result<T, RespError>;
+pub type ParseResult<T> = Result<T, ParseError>;
+
+#[cfg(test)]
+mod tests {
+    use super::ParseError;
+
+    #[test]
+    fn parse_error_describes_incomplete_resp_data() {
+        assert_eq!(ParseError::Incomplete.to_string(), "Incomplete data");
+    }
+}
