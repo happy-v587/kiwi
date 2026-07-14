@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 use client::Client;
 use resp::RespData;
@@ -140,5 +140,74 @@ impl Cmd for ZinterstoreCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 4 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let numkeys = match String::from_utf8_lossy(&argv[2]).parse::<usize>() {
+                Ok(numkeys) if numkeys > 0 => numkeys,
+                _ => {
+                    return Some(Err(crate::error::CommandError::InvalidArgument(
+                        crate::error::ArgumentError::ZStoreNumKeys,
+                    )));
+                }
+            };
+            if argv.len() < 3 + numkeys {
+                return Some(Err(crate::error::CommandError::InvalidArgument(
+                    crate::error::ArgumentError::Syntax,
+                )));
+            }
+            let keys = argv[3..3 + numkeys].to_vec();
+            let mut weights = Vec::new();
+            let mut aggregate = "SUM".to_string();
+            let mut index = 3 + numkeys;
+            while index < argv.len() {
+                match String::from_utf8_lossy(&argv[index])
+                    .to_uppercase()
+                    .as_str()
+                {
+                    "WEIGHTS" if index + numkeys < argv.len() => {
+                        for weight in &argv[index + 1..index + 1 + numkeys] {
+                            match String::from_utf8_lossy(weight).parse::<f64>() {
+                                Ok(weight) => weights.push(weight),
+                                Err(_) => {
+                                    return Some(Err(crate::error::CommandError::InvalidArgument(
+                                        crate::error::ArgumentError::ZStoreWeightNotFloat,
+                                    )));
+                                }
+                            }
+                        }
+                        index += numkeys + 1;
+                    }
+                    "AGGREGATE" if index + 1 < argv.len() => {
+                        aggregate = String::from_utf8_lossy(&argv[index + 1]).to_uppercase();
+                        if !matches!(aggregate.as_str(), "SUM" | "MIN" | "MAX") {
+                            return Some(Err(crate::error::CommandError::InvalidArgument(
+                                crate::error::ArgumentError::Syntax,
+                            )));
+                        }
+                        index += 2;
+                    }
+                    _ => {
+                        return Some(Err(crate::error::CommandError::InvalidArgument(
+                            crate::error::ArgumentError::Syntax,
+                        )));
+                    }
+                }
+            }
+            storage
+                .zinterstore(&argv[1], &keys, &weights, &aggregate)
+                .map(|count| RespData::Integer(count.into()))
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }

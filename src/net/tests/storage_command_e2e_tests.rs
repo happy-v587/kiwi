@@ -821,6 +821,46 @@ async fn storage_command_e2e_sorted_set_lex_and_range_removals_use_typed_replies
 }
 
 #[tokio::test]
+async fn storage_command_e2e_sorted_set_store_aggregations_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["ZADD", "scores", "1", "member"]).await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["ZINTERSTORE", "scores", "1", "scores", "WEIGHTS", "2"],
+        )
+        .await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["ZSCORE", "scores", "member"]).await,
+        RespData::BulkString(Some(Bytes::from_static(b"2")))
+    );
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["ZUNIONSTORE", "scores", "1", "scores", "AGGREGATE", "MAX"],
+        )
+        .await,
+        RespData::Integer(1)
+    );
+    let reply = send_command(&mut stream, &["ZUNIONSTORE", "scores", "0", "unused"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::ZSTORE_NUMKEYS_GT_ZERO
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)
