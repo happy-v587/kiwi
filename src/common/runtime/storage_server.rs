@@ -522,9 +522,12 @@ impl StorageServer {
                 let mut results = Vec::with_capacity(commands.len());
 
                 for command in commands {
-                    let result =
-                        Box::pin(Self::execute_legacy_storage_command(storage, command)).await?;
-                    results.push(result);
+                    match Box::pin(Self::execute_storage_command(storage, command)).await? {
+                        StorageCommandResponse::Reply(reply) => results.push(reply),
+                        StorageCommandResponse::CommandError(error) => {
+                            return Ok(StorageCommandResponse::CommandError(error));
+                        }
+                    }
                 }
 
                 Ok(StorageCommandResponse::Reply(RespData::Array(Some(
@@ -1206,62 +1209,20 @@ impl StorageServer {
         client.set_argv(argv);
         client.set_authenticated(true);
 
-        if let Some(result) = command.execute_typed(&client, Arc::clone(storage)) {
-            return Ok(match result {
-                Ok(reply) => StorageCommandResponse::Reply(reply),
-                Err(error) => StorageCommandResponse::CommandError(error),
-            });
-        }
-
-        command.execute(&client, Arc::clone(storage));
-        Ok(StorageCommandResponse::Reply(client.take_reply()))
-    }
-
-    /// Compatibility bridge for callers of `StorageCommand::Batch`.
-    ///
-    /// Batch replies are encoded as one RESP array and cannot yet preserve a
-    /// structured error for each element. Single-command network execution
-    /// uses `handle_execute_command` above and receives typed errors.
-    async fn execute_legacy_storage_command(
-        storage: &Arc<Storage>,
-        command: &StorageCommand,
-    ) -> Result<RespData, storage::error::Error> {
-        match command {
-            StorageCommand::Execute { cmd_name, argv } => {
-                let command_name = String::from_utf8_lossy(cmd_name).to_lowercase();
-                let Some(cmd_table) = STORAGE_COMMAND_TABLE.get() else {
-                    return SystemSnafu {
-                        message: "storage command table not initialized".to_string(),
-                    }
-                    .fail();
-                };
-                let Some(command) = cmd_table.get(command_name.as_str()) else {
-                    return SystemSnafu {
-                        message: format!(
-                            "command '{}' not supported in storage runtime",
-                            command_name
-                        ),
-                    }
-                    .fail();
-                };
-
-                let client = Client::new(Box::new(RuntimeCommandStream));
-                client.set_cmd_name(cmd_name);
-                client.set_argv(argv);
-                client.set_authenticated(true);
-                command.execute(&client, Arc::clone(storage));
-                Ok(client.take_reply())
+        let Some(result) = command.execute_typed(&client, Arc::clone(storage)) else {
+            return SystemSnafu {
+                message: format!(
+                    "command '{}' does not implement typed execution",
+                    command_name
+                ),
             }
-            StorageCommand::Batch { commands } => {
-                let mut results = Vec::with_capacity(commands.len());
-                for command in commands {
-                    results.push(
-                        Box::pin(Self::execute_legacy_storage_command(storage, command)).await?,
-                    );
-                }
-                Ok(RespData::Array(Some(results)))
-            }
-        }
+            .fail();
+        };
+
+        Ok(match result {
+            Ok(reply) => StorageCommandResponse::Reply(reply),
+            Err(error) => StorageCommandResponse::CommandError(error),
+        })
     }
 }
 
@@ -1427,6 +1388,60 @@ mod tests {
                 .await
                 .expect("GET should complete with a semantic result"),
             StorageCommandResponse::CommandError(cmd::error::CommandError::WrongType)
+        ));
+
+        drop(storage);
+        safe_cleanup_test_db(&db_path);
+    }
+
+    #[tokio::test]
+    async fn batch_execution_uses_typed_command_results() {
+        let (storage, db_path) = opened_test_storage();
+        let batch = StorageCommand::Batch {
+            commands: vec![
+                StorageCommand::Execute {
+                    cmd_name: b"set".to_vec(),
+                    argv: vec![b"set".to_vec(), b"key".to_vec(), b"value".to_vec()],
+                },
+                StorageCommand::Execute {
+                    cmd_name: b"get".to_vec(),
+                    argv: vec![b"get".to_vec(), b"key".to_vec()],
+                },
+            ],
+        };
+
+        assert_eq!(
+            expect_reply(
+                StorageServer::execute_storage_command(&storage, &batch)
+                    .await
+                    .expect("batch should execute through typed commands"),
+            ),
+            RespData::Array(Some(vec![
+                RespData::SimpleString("OK".into()),
+                RespData::BulkString(Some(b"value".to_vec().into())),
+            ]))
+        );
+
+        drop(storage);
+        safe_cleanup_test_db(&db_path);
+    }
+
+    #[tokio::test]
+    async fn batch_execution_preserves_the_first_typed_command_error() {
+        let (storage, db_path) = opened_test_storage();
+        let batch = StorageCommand::Batch {
+            commands: vec![StorageCommand::Execute {
+                cmd_name: b"get".to_vec(),
+                argv: vec![b"get".to_vec(), b"only-key".to_vec(), b"extra".to_vec()],
+            }],
+        };
+
+        assert!(matches!(
+            StorageServer::execute_storage_command(&storage, &batch)
+                .await
+                .expect("batch should produce a semantic error result"),
+            StorageCommandResponse::CommandError(cmd::error::CommandError::WrongArity { command })
+                if command == "get"
         ));
 
         drop(storage);
