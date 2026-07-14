@@ -22,7 +22,7 @@ use std::mem;
 use bytes::BytesMut;
 
 use crate::coding::{decode_fixed, encode_fixed};
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::storage_define::{
     ENCODED_KEY_DELIM_SIZE, NEED_TRANSFORM_CHARACTER, decode_user_key, encode_user_key,
 };
@@ -126,10 +126,10 @@ impl ParsedListsDataKey {
         // basic length check using constants for clarity
         let min_len = RESERVE1_LEN + RESERVE2_LEN;
         if key.len() < min_len {
-            return Err(crate::error::Error::InvalidFormat {
-                message: "Key too short for reserve fields".to_string(),
-                location: snafu::location!(),
-            });
+            return Err(Error::corruption(
+                "decode list data key",
+                "key too short for reserve fields",
+            ));
         }
 
         // skip head reserve1 and tail reserve2
@@ -142,9 +142,8 @@ impl ParsedListsDataKey {
             .windows(ENCODED_KEY_DELIM_SIZE)
             .position(|window| window == b"\x00\x00")
             .map(|p| p + ENCODED_KEY_DELIM_SIZE)
-            .ok_or_else(|| crate::error::Error::InvalidFormat {
-                message: "Encoded key delimiter not found".to_string(),
-                location: snafu::location!(),
+            .ok_or_else(|| {
+                Error::corruption("decode list data key", "encoded key delimiter not found")
             })?;
 
         // decode user key
@@ -158,10 +157,10 @@ impl ParsedListsDataKey {
 
         // ensure we have enough bytes left for version and index
         if index_offset + U64_LEN > encoded_key_end {
-            return Err(crate::error::Error::InvalidFormat {
-                message: "Key too short for version/index fields".to_string(),
-                location: snafu::location!(),
-            });
+            return Err(Error::corruption(
+                "decode list data key",
+                "key too short for version/index fields",
+            ));
         }
 
         let version = decode_fixed(&key[version_offset..version_offset + U64_LEN]);
@@ -169,29 +168,21 @@ impl ParsedListsDataKey {
 
         // sanity check: we should end exactly before RESERVE2
         if index_offset + U64_LEN != encoded_key_end {
-            return Err(crate::error::Error::InvalidFormat {
-                message: "Unexpected bytes between index and reserve2".to_string(),
-                location: snafu::location!(),
-            });
+            return Err(Error::corruption(
+                "decode list data key",
+                "unexpected bytes between index and reserve2",
+            ));
         }
 
         // Read reserve1 from the beginning of the key
-        let reserve1 =
-            key[..RESERVE1_LEN]
-                .try_into()
-                .map_err(|_| crate::error::Error::InvalidFormat {
-                    message: "Failed to read reserve1 field".to_string(),
-                    location: snafu::location!(),
-                })?;
+        let reserve1 = key[..RESERVE1_LEN].try_into().map_err(|_| {
+            Error::corruption("decode list data key", "failed to read reserve1 field")
+        })?;
 
         // Read reserve2 from the end of the key
-        let reserve2 =
-            key[encoded_key_end..]
-                .try_into()
-                .map_err(|_| crate::error::Error::InvalidFormat {
-                    message: "Failed to read reserve2 field".to_string(),
-                    location: snafu::location!(),
-                })?;
+        let reserve2 = key[encoded_key_end..].try_into().map_err(|_| {
+            Error::corruption("decode list data key", "failed to read reserve2 field")
+        })?;
 
         Ok(Self {
             key_str,
@@ -227,7 +218,7 @@ impl ParsedListsDataKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::Error;
+    use crate::error::{Error, StorageError};
 
     #[test]
     fn test_encode_decode() -> Result<()> {
@@ -282,7 +273,16 @@ mod tests {
     fn test_invalid_encoding() {
         let invalid_data = b"invalid\x00\x02data";
         let result = ParsedListsDataKey::from_slice(invalid_data);
-        assert!(matches!(result, Err(Error::InvalidFormat { .. })));
+        assert!(matches!(
+            result,
+            Err(Error::Typed {
+                error: StorageError::Corruption {
+                    operation: "decode list data key",
+                    ..
+                },
+                ..
+            })
+        ));
     }
 
     #[test]

@@ -247,6 +247,17 @@ pub enum Error {
 }
 
 impl Error {
+    /// Wrap malformed persisted data in the typed storage error model.
+    pub fn corruption(operation: &'static str, detail: impl Into<String>) -> Self {
+        Self::Typed {
+            error: StorageError::Corruption {
+                operation,
+                detail: detail.into(),
+            },
+            location: Default::default(),
+        }
+    }
+
     /// Returns whether this legacy adapter wraps a typed key mismatch.
     ///
     /// Callers use this temporary semantic query instead of inspecting error
