@@ -84,6 +84,9 @@ impl RedisErrorRenderer {
             CommandError::InvalidArgument(ArgumentError::BitNotInteger) => {
                 error_catalog::BIT_IS_NOT_INTEGER.to_string()
             }
+            CommandError::InvalidArgument(ArgumentError::BitMustBeZeroOrOne) => {
+                error_catalog::BIT_MUST_BE_1_OR_0.to_string()
+            }
             CommandError::InvalidArgument(ArgumentError::OutOfRange) => {
                 error_catalog::VALUE_OUT_OF_RANGE_MUST_BE_POSITIVE.to_string()
             }

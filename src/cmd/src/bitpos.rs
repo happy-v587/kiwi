@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 /// BITPOS key bit [start] [end] [BYTE | BIT]
@@ -155,5 +155,63 @@ impl Cmd for BitposCmd {
             }
             Err(e) => client.set_storage_error(&e),
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 3 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let bit = match String::from_utf8_lossy(&argv[2]).parse::<i64>() {
+                Ok(bit @ (0 | 1)) => bit,
+                _ => {
+                    return Some(Err(crate::error::CommandError::InvalidArgument(
+                        crate::error::ArgumentError::BitMustBeZeroOrOne,
+                    )));
+                }
+            };
+            let mut start = None;
+            let mut end = None;
+            let mut is_bit_mode = false;
+            let mut index = 3;
+            while index < argv.len() {
+                if argv[index].eq_ignore_ascii_case(b"BIT")
+                    || argv[index].eq_ignore_ascii_case(b"BYTE")
+                {
+                    if index != argv.len() - 1 || start.is_none() || end.is_none() {
+                        return Some(Err(crate::error::CommandError::InvalidArgument(
+                            crate::error::ArgumentError::Syntax,
+                        )));
+                    }
+                    is_bit_mode = argv[index].eq_ignore_ascii_case(b"BIT");
+                    break;
+                }
+                match String::from_utf8_lossy(&argv[index]).parse::<i64>() {
+                    Ok(value) if start.is_none() => start = Some(value),
+                    Ok(value) if end.is_none() => end = Some(value),
+                    Ok(_) => {
+                        return Some(Err(crate::error::CommandError::InvalidArgument(
+                            crate::error::ArgumentError::Syntax,
+                        )));
+                    }
+                    Err(_) => {
+                        return Some(Err(crate::error::CommandError::InvalidArgument(
+                            crate::error::ArgumentError::NotInteger,
+                        )));
+                    }
+                }
+                index += 1;
+            }
+            storage
+                .bitpos(&argv[1], bit, start, end, is_bit_mode)
+                .map(RespData::Integer)
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
