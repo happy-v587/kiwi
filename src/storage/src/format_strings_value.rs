@@ -16,11 +16,10 @@
 // limitations under the License.
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use snafu::ensure;
 
 use crate::delegate_internal_value;
 use crate::delegate_parsed_value;
-use crate::error::{InvalidFormatSnafu, Result};
+use crate::error::{Error, Result};
 use crate::format_base_value::{DataType, InternalValue, ParsedInternalValue};
 use crate::storage_define::{
     STRING_VALUE_SUFFIXLENGTH, SUFFIX_RESERVE_LENGTH, TIMESTAMP_LENGTH, TYPE_LENGTH,
@@ -77,17 +76,22 @@ impl ParsedStringsValue {
         T: Into<BytesMut>,
     {
         let value: BytesMut = internal_value.into();
-        ensure!(
-            value.len() >= STRING_VALUE_SUFFIXLENGTH,
-            InvalidFormatSnafu {
-                message: format!(
+        if value.len() < STRING_VALUE_SUFFIXLENGTH {
+            return Err(Error::corruption(
+                "decode string value",
+                format!(
                     "invalid string value length: {} < {STRING_VALUE_SUFFIXLENGTH}",
                     value.len()
-                )
-            }
-        );
+                ),
+            ));
+        }
 
-        let data_type = DataType::try_from(value[0])?;
+        let data_type = DataType::try_from(value[0]).map_err(|_| {
+            Error::corruption(
+                "decode string value",
+                format!("invalid data type tag: {}", value[0]),
+            )
+        })?;
 
         let user_value_len = value.len() - TYPE_LENGTH - STRING_VALUE_SUFFIXLENGTH;
         let user_value_start = TYPE_LENGTH;
@@ -101,16 +105,16 @@ impl ParsedStringsValue {
 
         let mut time_reader = &value[reserve_end..];
         debug_assert!(time_reader.len() >= 2 * TIMESTAMP_LENGTH);
-        ensure!(
-            time_reader.len() >= 2 * TIMESTAMP_LENGTH,
-            InvalidFormatSnafu {
-                message: format!(
+        if time_reader.len() < 2 * TIMESTAMP_LENGTH {
+            return Err(Error::corruption(
+                "decode string value",
+                format!(
                     "invalid string value length: {} < {}",
                     time_reader.len(),
                     2 * TIMESTAMP_LENGTH,
-                )
-            }
-        );
+                ),
+            ));
+        }
         let ctime = time_reader.get_u64_le();
         let etime = time_reader.get_u64_le();
 
@@ -231,6 +235,7 @@ mod tests_string_value {
 #[cfg(test)]
 mod tests_parsed_string_value {
     use super::*;
+    use crate::error::{Error, StorageError};
 
     const TEST_CTIME: u64 = 1620000000;
     const TEST_ETIME: u64 = 1630000000;
@@ -264,7 +269,16 @@ mod tests_parsed_string_value {
         buf.put_u8(DataType::String as u8);
         buf.put_slice(TEST_VALUE);
         let parsed = ParsedStringsValue::new(buf);
-        assert!(parsed.is_err());
+        assert!(matches!(
+            parsed,
+            Err(Error::Typed {
+                error: StorageError::Corruption {
+                    operation: "decode string value",
+                    ..
+                },
+                ..
+            })
+        ));
     }
 
     #[test]
