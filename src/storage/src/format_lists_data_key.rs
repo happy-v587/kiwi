@@ -148,7 +148,12 @@ impl ParsedListsDataKey {
 
         // decode user key
         let mut key_str_buf = BytesMut::with_capacity(pos);
-        decode_user_key(&encoded_key_slice[..pos], &mut key_str_buf)?;
+        decode_user_key(&encoded_key_slice[..pos], &mut key_str_buf).map_err(|err| {
+            Error::corruption(
+                "decode list data key",
+                format!("invalid encoded user key: {err}"),
+            )
+        })?;
         let key_str = key_str_buf.to_vec();
 
         // version & index follow immediately after the encoded key
@@ -273,6 +278,28 @@ mod tests {
     fn test_invalid_encoding() {
         let invalid_data = b"invalid\x00\x02data";
         let result = ParsedListsDataKey::from_slice(invalid_data);
+        assert!(matches!(
+            result,
+            Err(Error::Typed {
+                error: StorageError::Corruption {
+                    operation: "decode list data key",
+                    ..
+                },
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn test_invalid_encoded_user_key_is_corruption() {
+        let mut invalid_data = vec![0; RESERVE1_LEN];
+        invalid_data.extend_from_slice(b"key\x00\x02\x00\x00");
+        invalid_data.extend_from_slice(&0_u64.to_le_bytes());
+        invalid_data.extend_from_slice(&0_u64.to_le_bytes());
+        invalid_data.extend_from_slice(&[0; RESERVE2_LEN]);
+
+        let result = ParsedListsDataKey::from_slice(&invalid_data);
+
         assert!(matches!(
             result,
             Err(Error::Typed {
