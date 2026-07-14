@@ -896,6 +896,32 @@ async fn storage_command_e2e_basic_list_commands_use_typed_replies() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_list_pop_commands_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["RPUSH", "list", "first", "second", "third"]).await,
+        RespData::Integer(3)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["LPOP", "list"]).await,
+        RespData::BulkString(Some(Bytes::from_static(b"first")))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["RPOP", "list", "2"]).await,
+        RespData::Array(Some(vec![
+            RespData::BulkString(Some(Bytes::from_static(b"third"))),
+            RespData::BulkString(Some(Bytes::from_static(b"second"))),
+        ]))
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)

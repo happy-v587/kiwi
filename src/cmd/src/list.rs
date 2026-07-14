@@ -224,6 +224,48 @@ impl Cmd for LPopCmd {
             }
         }
     }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            2 | 3 => {
+                let count = if argv.len() == 3 {
+                    match String::from_utf8_lossy(&argv[2]).parse::<usize>() {
+                        Ok(count) if count > 0 && count < MAX_SAFE_POP_COUNT => Some(count),
+                        _ => {
+                            return Some(Err(crate::error::CommandError::InvalidArgument(
+                                crate::error::ArgumentError::NotInteger,
+                            )));
+                        }
+                    }
+                } else {
+                    None
+                };
+                storage
+                    .lpop(&argv[1], count)
+                    .map(|values| match (count, values) {
+                        (Some(_), Some(values)) => RespData::Array(Some(
+                            values
+                                .into_iter()
+                                .map(|value| RespData::BulkString(Some(Bytes::from(value))))
+                                .collect(),
+                        )),
+                        (None, Some(values)) => {
+                            RespData::BulkString(values.into_iter().next().map(Bytes::from))
+                        }
+                        (_, None) => RespData::BulkString(None),
+                    })
+                    .map_err(crate::error::CommandError::storage)
+            }
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
 }
 
 /// RPOP command - Removes and returns the last element of the list stored at key
@@ -297,6 +339,48 @@ impl Cmd for RPopCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            2 | 3 => {
+                let count = if argv.len() == 3 {
+                    match String::from_utf8_lossy(&argv[2]).parse::<usize>() {
+                        Ok(count) if count > 0 && count < MAX_SAFE_POP_COUNT => Some(count),
+                        _ => {
+                            return Some(Err(crate::error::CommandError::InvalidArgument(
+                                crate::error::ArgumentError::NotInteger,
+                            )));
+                        }
+                    }
+                } else {
+                    None
+                };
+                storage
+                    .rpop(&argv[1], count)
+                    .map(|values| match (count, values) {
+                        (Some(_), Some(values)) => RespData::Array(Some(
+                            values
+                                .into_iter()
+                                .map(|value| RespData::BulkString(Some(Bytes::from(value))))
+                                .collect(),
+                        )),
+                        (None, Some(values)) => {
+                            RespData::BulkString(values.into_iter().next().map(Bytes::from))
+                        }
+                        (_, None) => RespData::BulkString(None),
+                    })
+                    .map_err(crate::error::CommandError::storage)
+            }
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 
