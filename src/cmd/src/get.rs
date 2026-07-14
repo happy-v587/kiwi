@@ -84,4 +84,8 @@ impl Cmd for GetCmd {
             }),
         })
     }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
 }

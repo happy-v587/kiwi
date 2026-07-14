@@ -73,6 +73,10 @@ impl Cmd for PingCmd {
             }),
         })
     }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
 }
 
 #[allow(clippy::unwrap_used)]

@@ -232,6 +232,13 @@ pub trait Cmd: Send + Sync {
         None
     }
 
+    /// Whether this command owns all of its validation and execution through
+    /// [`Cmd::execute_typed`]. Network dispatch skips the legacy
+    /// client-mutating `do_initial` hook for these commands.
+    fn uses_typed_execution(&self) -> bool {
+        false
+    }
+
     fn clone_box(&self) -> Box<dyn Cmd>;
 
     fn execute(&self, client: &Client, storage: Arc<Storage>) {

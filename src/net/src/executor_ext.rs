@@ -77,8 +77,11 @@ impl CmdExecutorNetworkExt for CmdExecutor {
                 }
             }
 
-            // Execute do_initial if needed
-            if !exec.cmd.do_initial(&exec.client) {
+            // Legacy commands still use this hook for validation and routing
+            // state. Typed commands validate from argv inside execute_typed,
+            // so invoking the old hook would let it write a reply before the
+            // structured error reaches the network rendering boundary.
+            if !exec.cmd.uses_typed_execution() && !exec.cmd.do_initial(&exec.client) {
                 debug!("Command initial check failed for: {}", cmd_name);
                 return Ok(());
             }

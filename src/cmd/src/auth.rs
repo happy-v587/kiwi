@@ -130,6 +130,10 @@ impl Cmd for AuthCmd {
             }),
         })
     }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
 }
 
 #[allow(clippy::unwrap_used)]

@@ -130,6 +130,10 @@ impl Cmd for HelloCmd {
     fn execute_typed(&self, client: &Client, _storage: Arc<Storage>) -> Option<CommandResult> {
         Some(self.execute_hello(client))
     }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
 }
 
 /// Convert RESP negotiation semantics to the command error boundary.
