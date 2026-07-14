@@ -16,10 +16,9 @@
 // limitations under the License.
 
 use bytes::{BufMut, Bytes, BytesMut};
-use snafu::ensure;
 
 use crate::{
-    error::{InvalidFormatSnafu, Result},
+    error::{Error, Result},
     storage_define::{
         ENCODED_KEY_DELIM_SIZE, PREFIX_RESERVE_LENGTH, SUFFIX_RESERVE_LENGTH, decode_user_key,
         encode_user_key,
@@ -75,14 +74,19 @@ impl ParsedBaseKey {
     fn decode(encoded_key: &[u8], key_str: &mut BytesMut) -> Result<()> {
         let key_len = encoded_key.len();
         let min_len = PREFIX_RESERVE_LENGTH + SUFFIX_RESERVE_LENGTH;
-        ensure!(
-            key_len >= min_len,
-            InvalidFormatSnafu {
-                message: format!("Invalid encoded key length: {} < {}", key_len, min_len)
-            }
-        );
+        if key_len < min_len {
+            return Err(Error::corruption(
+                "decode base key",
+                format!("invalid encoded key length: {key_len} < {min_len}"),
+            ));
+        }
         let middle = &encoded_key[PREFIX_RESERVE_LENGTH..key_len - SUFFIX_RESERVE_LENGTH];
-        decode_user_key(middle, key_str)
+        decode_user_key(middle, key_str).map_err(|err| {
+            Error::corruption(
+                "decode base key",
+                format!("invalid encoded user key: {err}"),
+            )
+        })
     }
 
     pub fn key(&self) -> &[u8] {
@@ -94,6 +98,23 @@ impl ParsedBaseKey {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::{Error, StorageError};
+
+    #[test]
+    fn parsed_base_key_rejects_short_persisted_key_as_corruption() {
+        let parsed = ParsedBaseKey::new(&[]);
+
+        assert!(matches!(
+            parsed,
+            Err(Error::Typed {
+                error: StorageError::Corruption {
+                    operation: "decode base key",
+                    ..
+                },
+                ..
+            })
+        ));
+    }
 
     #[test]
     fn mv_test_base_key_encode_and_decode() {
