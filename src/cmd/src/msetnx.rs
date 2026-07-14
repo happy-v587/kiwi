@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -90,5 +90,27 @@ impl Cmd for MsetnxCmd {
             Ok(false) => client.set_reply(RespData::Integer(0)),
             Err(e) => client.set_storage_error(&e),
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 3 || argv.len().is_multiple_of(2) {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let kvs = argv[1..]
+                .chunks_exact(2)
+                .map(|pair| (pair[0].clone(), pair[1].clone()))
+                .collect::<Vec<_>>();
+            match storage.msetnx(&kvs) {
+                Ok(result) => Ok(RespData::Integer(if result { 1 } else { 0 })),
+                Err(error) => Err(crate::error::CommandError::storage(error)),
+            }
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
