@@ -24,6 +24,7 @@ pub mod bitpos;
 pub mod decr;
 pub mod decrby;
 pub mod del;
+pub mod error;
 pub mod exists;
 pub mod expire;
 pub mod expireat;

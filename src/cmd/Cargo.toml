@@ -16,6 +16,7 @@ resp = { path = "../resp" }
 conf = { path = "../conf" }
 error-catalog = { path = "../common/error-catalog" }
 subtle = "2.5"
+thiserror.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }

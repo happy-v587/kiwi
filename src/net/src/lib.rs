@@ -30,6 +30,7 @@ pub mod tcp;
 
 // TODO: delete this module
 pub mod error;
+pub mod error_response;
 pub mod unix;
 
 use std::error::Error;

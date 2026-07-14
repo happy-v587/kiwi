@@ -1,0 +1,103 @@
+// Copyright (c) 2024-present, arana-db Community.  All rights reserved.
+//
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use cmd::error::{ArgumentError, AuthenticationError, CommandError};
+use resp::RespData;
+
+/// Converts typed request failures to Redis-compatible RESP error replies.
+///
+/// This is the network boundary: command code chooses a semantic variant and
+/// never assembles the final protocol error text itself.
+pub struct RedisErrorRenderer;
+
+impl RedisErrorRenderer {
+    pub fn render_command(error: &CommandError) -> RespData {
+        RespData::error(Self::command_message(error))
+    }
+
+    fn command_message(error: &CommandError) -> String {
+        match error {
+            CommandError::WrongType => error_catalog::WRONGTYPE.to_string(),
+            CommandError::WrongArity { command } => error_catalog::wrong_number(command),
+            CommandError::InvalidArgument(ArgumentError::Syntax) => {
+                error_catalog::SYNTAX_ERROR.to_string()
+            }
+            CommandError::InvalidArgument(ArgumentError::NotInteger) => {
+                error_catalog::VALUE_NOT_INTEGER.to_string()
+            }
+            CommandError::InvalidArgument(ArgumentError::NotFloat) => {
+                error_catalog::VALUE_NOT_VALID_FLOAT.to_string()
+            }
+            CommandError::InvalidArgument(ArgumentError::OutOfRange) => {
+                error_catalog::VALUE_OUT_OF_RANGE_MUST_BE_POSITIVE.to_string()
+            }
+            CommandError::InvalidArgument(ArgumentError::InvalidCursor) => {
+                error_catalog::INVALID_CURSOR.to_string()
+            }
+            CommandError::Authentication(AuthenticationError::Required) => {
+                error_catalog::NOAUTH.to_string()
+            }
+            CommandError::Authentication(AuthenticationError::WrongPassword) => {
+                error_catalog::WRONGPASS.to_string()
+            }
+            CommandError::Authentication(AuthenticationError::PasswordNotConfigured) => {
+                error_catalog::AUTH_NO_PASSWORD_CONFIGURED.to_string()
+            }
+            CommandError::Internal => error_catalog::INTERNAL_SERVER_ERROR.to_string(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use cmd::error::{ArgumentError, AuthenticationError, CommandError};
+    use resp::{RespEncode, RespVersion, encode::RespEncoder};
+
+    use super::RedisErrorRenderer;
+
+    fn render(error: CommandError) -> bytes::Bytes {
+        let mut encoder = RespEncoder::new(RespVersion::RESP2);
+        encoder.encode_resp_data(&RedisErrorRenderer::render_command(&error));
+        encoder.get_response()
+    }
+
+    #[test]
+    fn renders_representative_command_errors_as_compatible_resp_bytes() {
+        assert_eq!(
+            render(CommandError::WrongArity {
+                command: "get".to_string(),
+            }),
+            b"-ERR wrong number of arguments for 'get' command\r\n".as_slice()
+        );
+        assert_eq!(
+            render(CommandError::WrongType),
+            b"-WRONGTYPE Operation against a key holding the wrong kind of value\r\n".as_slice()
+        );
+        assert_eq!(
+            render(CommandError::InvalidArgument(ArgumentError::Syntax)),
+            b"-ERR syntax error\r\n".as_slice()
+        );
+        assert_eq!(
+            render(CommandError::Authentication(AuthenticationError::Required)),
+            b"-NOAUTH Authentication required.\r\n".as_slice()
+        );
+        assert_eq!(
+            render(CommandError::Internal),
+            b"-ERR internal server error\r\n".as_slice()
+        );
+    }
+}
