@@ -114,7 +114,7 @@ impl Cmd for PsetexCmd {
                     }
                 }
                 Ok(_) => Err(crate::error::CommandError::InvalidArgument(
-                    crate::error::ArgumentError::InvalidPexpireTime,
+                    crate::error::ArgumentError::InvalidPsetexTime,
                 )),
                 Err(_) => Err(crate::error::CommandError::InvalidArgument(
                     crate::error::ArgumentError::NotInteger,

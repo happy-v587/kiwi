@@ -120,6 +120,7 @@ pub enum ArgumentError {
     OffsetOutOfRange,
     InvalidExpireTime,
     InvalidPexpireTime,
+    InvalidPsetexTime,
     InvalidCursor,
 }
 

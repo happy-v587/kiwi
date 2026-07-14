@@ -1324,3 +1324,59 @@ async fn storage_command_e2e_generic_storage_commands_use_storage_path() {
 
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn storage_command_e2e_ttl_and_keyspace_commands_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["SET", "expires", "value"]).await,
+        RespData::SimpleString(Bytes::from_static(b"OK"))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["EXPIRE", "expires", "10"]).await,
+        RespData::Integer(1)
+    );
+    assert!(matches!(
+        send_command(&mut stream, &["TTL", "expires"]).await,
+        RespData::Integer(0..=10)
+    ));
+    assert_eq!(
+        send_command(&mut stream, &["PERSIST", "expires"]).await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["TTL", "expires"]).await,
+        RespData::Integer(-1)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["PEXPIREAT", "expires", "9999999999999"]).await,
+        RespData::Integer(1)
+    );
+
+    let reply = send_command(&mut stream, &["PEXPIRE", "expires", "-1"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::INVALID_EXPIRE_TIME_PEXPIRE
+    );
+
+    assert_eq!(
+        send_command(&mut stream, &["SET", "keyspace:one", "1"]).await,
+        RespData::SimpleString(Bytes::from_static(b"OK"))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["KEYS", "keyspace:"]).await,
+        RespData::Array(Some(vec![RespData::BulkString(Some(Bytes::from_static(
+            b"keyspace:one"
+        )))]))
+    );
+    assert!(matches!(
+        send_command(&mut stream, &["RANDOMKEY"]).await,
+        RespData::BulkString(Some(_))
+    ));
+
+    server.shutdown().await;
+}

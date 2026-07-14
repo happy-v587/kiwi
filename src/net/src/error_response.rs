@@ -100,6 +100,9 @@ impl RedisErrorRenderer {
                 error_catalog::INVALID_EXPIRE_TIME.to_string()
             }
             CommandError::InvalidArgument(ArgumentError::InvalidPexpireTime) => {
+                error_catalog::INVALID_EXPIRE_TIME_PEXPIRE.to_string()
+            }
+            CommandError::InvalidArgument(ArgumentError::InvalidPsetexTime) => {
                 error_catalog::INVALID_EXPIRE_TIME_PSETEX.to_string()
             }
             CommandError::InvalidArgument(ArgumentError::InvalidCursor) => {
