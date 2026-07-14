@@ -24,9 +24,90 @@ use common_macro::stack_trace_debug;
 use error_catalog::{INTERNAL_SERVER_ERROR, ensure_err_prefix};
 use snafu::{Location, Snafu};
 
+use crate::format_base_value::DataType;
 use crate::storage::BgTask;
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Typed failures produced by the storage layer.
+///
+/// This model intentionally separates Redis key-type mismatches from damaged
+/// persisted bytes and impossible internal states. The legacy [`Error`] type
+/// remains only while command dispatch still writes RESP errors directly to a
+/// `Client`; later migration steps replace that adapter with this type.
+#[derive(Debug, thiserror::Error)]
+pub enum StorageError {
+    #[error("RocksDB operation failed while {operation}: {source}")]
+    Engine {
+        operation: &'static str,
+        #[source]
+        source: rocksdb::Error,
+    },
+
+    #[error("I/O operation failed while {operation}: {source}")]
+    Io {
+        operation: &'static str,
+        #[source]
+        source: io::Error,
+    },
+
+    #[error("storage data corruption while {operation}: {detail}")]
+    Corruption {
+        operation: &'static str,
+        detail: String,
+    },
+
+    #[error("storage invalid state while {operation}: {detail}")]
+    InvalidState {
+        operation: &'static str,
+        detail: String,
+    },
+
+    #[error("wrong key type, expected {expected:?}, found {actual:?}")]
+    WrongType {
+        expected: DataType,
+        actual: DataType,
+    },
+}
+
+#[cfg(test)]
+mod storage_error_tests {
+    use super::StorageError;
+    use crate::format_base_value::DataType;
+
+    #[test]
+    fn storage_error_keeps_wrong_type_distinguishable() {
+        let error = StorageError::WrongType {
+            expected: DataType::String,
+            actual: DataType::Hash,
+        };
+
+        assert_eq!(
+            error.to_string(),
+            "wrong key type, expected String, found Hash"
+        );
+    }
+
+    #[test]
+    fn storage_error_labels_malformed_data_as_corruption() {
+        let error = StorageError::Corruption {
+            operation: "decode list metadata",
+            detail: "expected 16 bytes, got 7".to_string(),
+        };
+
+        assert!(error.to_string().contains("storage data corruption"));
+    }
+
+    #[test]
+    fn storage_error_labels_impossible_state_explicitly() {
+        let error = StorageError::InvalidState {
+            operation: "open column family",
+            detail: "default column family missing".to_string(),
+        };
+
+        assert!(error.to_string().contains("storage invalid state"));
+    }
+}
 
 #[allow(dead_code)]
 #[derive(Snafu)]
