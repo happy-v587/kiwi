@@ -446,6 +446,44 @@ async fn storage_command_e2e_hscan_uses_typed_arguments_and_reply() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_basic_set_commands_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["SADD", "set", "alpha", "beta", "alpha"]).await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SCARD", "set"]).await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SCARD", "missing"]).await,
+        RespData::Integer(0)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SISMEMBER", "set", "alpha"]).await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SMEMBERS", "set"]).await,
+        RespData::Array(Some(vec![
+            RespData::BulkString(Some(Bytes::from_static(b"alpha"))),
+            RespData::BulkString(Some(Bytes::from_static(b"beta"))),
+        ]))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SREM", "set", "alpha", "missing"]).await,
+        RespData::Integer(1)
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)

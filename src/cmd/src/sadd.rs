@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -71,6 +71,25 @@ impl Cmd for SaddCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 3 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let members = argv[2..].iter().map(Vec::as_slice).collect::<Vec<_>>();
+            storage
+                .sadd(&argv[1], &members)
+                .map(|added| RespData::Integer(added.into()))
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 #[allow(clippy::unwrap_used)]

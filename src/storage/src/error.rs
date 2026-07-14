@@ -272,6 +272,15 @@ impl Error {
         )
     }
 
+    /// Returns whether this adapter represents Redis's missing-key condition.
+    ///
+    /// A small number of commands intentionally convert that condition to a
+    /// normal reply (for example, `SCARD` returns zero for a missing key).
+    /// Keeping the query here avoids command code matching display text.
+    pub fn is_key_not_found(&self) -> bool {
+        matches!(self, Error::KeyNotFound { .. })
+    }
+
     /// Convert this storage error into a RESP-safe error string.
     ///
     /// The returned text is intended to be placed directly into
