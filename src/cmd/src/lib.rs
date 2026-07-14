@@ -120,6 +120,16 @@ use log::debug;
 use resp::RespData;
 use storage::storage::Storage;
 
+use crate::error::CommandError;
+
+/// A command reply or a typed command-semantic failure.
+///
+/// Commands are migrated to this result incrementally. Until all command
+/// implementations are converted, [`Cmd::execute_typed`] returns `None` for
+/// legacy commands and dispatch falls back to the existing client-mutation
+/// path.
+pub type CommandResult = std::result::Result<RespData, CommandError>;
+
 /// Extension trait for setting RESP error replies from storage errors.
 pub trait ClientExt {
     /// Set the client reply to a RESP error derived from a storage error.
@@ -215,6 +225,12 @@ pub trait Cmd: Send + Sync {
     fn do_initial(&self, client: &Client) -> bool;
 
     fn do_cmd(&self, client: &Client, storage: Arc<Storage>);
+
+    /// Execute through the typed result path when this command has been
+    /// migrated. `None` means the implementation still uses the legacy path.
+    fn execute_typed(&self, _client: &Client, _storage: Arc<Storage>) -> Option<CommandResult> {
+        None
+    }
 
     fn clone_box(&self) -> Box<dyn Cmd>;
 

@@ -105,10 +105,21 @@ impl CmdExecutorNetworkExt for CmdExecutor {
 static LOCAL_DUMMY_STORAGE: LazyLock<Arc<Storage>> = LazyLock::new(|| Arc::new(Storage::new(1, 0)));
 
 async fn execute_local_command(exec: &NetworkCmdExecution) -> Result<(), DualRuntimeError> {
-    // Use Cmd::execute to run the full check_arg -> do_initial -> do_cmd pipeline,
-    // consistent with the storage-runtime dispatch path.
-    exec.cmd
-        .execute(exec.client.as_ref(), Arc::clone(&LOCAL_DUMMY_STORAGE));
+    if let Some(result) = exec
+        .cmd
+        .execute_typed(exec.client.as_ref(), Arc::clone(&LOCAL_DUMMY_STORAGE))
+    {
+        let reply = match result {
+            Ok(reply) => reply,
+            Err(error) => RedisErrorRenderer::render_command(&error),
+        };
+        exec.client.set_reply(reply);
+    } else {
+        // Legacy commands still write their reply through Client. This branch
+        // disappears as command implementations migrate to execute_typed.
+        exec.cmd
+            .execute(exec.client.as_ref(), Arc::clone(&LOCAL_DUMMY_STORAGE));
+    }
     Ok(())
 }
 
