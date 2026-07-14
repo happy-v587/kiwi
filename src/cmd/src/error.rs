@@ -59,6 +59,7 @@ pub enum AuthenticationError {
     Required,
     WrongPassword,
     PasswordNotConfigured,
+    AclNotSupported,
 }
 
 #[cfg(test)]

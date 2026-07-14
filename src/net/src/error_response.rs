@@ -73,6 +73,9 @@ impl RedisErrorRenderer {
             CommandError::Authentication(AuthenticationError::PasswordNotConfigured) => {
                 error_catalog::AUTH_NO_PASSWORD_CONFIGURED.to_string()
             }
+            CommandError::Authentication(AuthenticationError::AclNotSupported) => {
+                error_catalog::AUTH_ACL_NOT_SUPPORTED.to_string()
+            }
             CommandError::Hello(HelloError::InvalidArgument(message)) => {
                 error_catalog::ensure_err_prefix(message)
             }
@@ -121,6 +124,12 @@ mod tests {
         assert_eq!(
             render(CommandError::Authentication(AuthenticationError::Required)),
             b"-NOAUTH Authentication required.\r\n".as_slice()
+        );
+        assert_eq!(
+            render(CommandError::Authentication(
+                AuthenticationError::AclNotSupported
+            )),
+            b"-ERR ACL authentication is not supported\r\n".as_slice()
         );
         assert_eq!(
             render(CommandError::Internal),

@@ -22,7 +22,7 @@ use resp::RespData;
 use storage::storage::Storage;
 use subtle::ConstantTimeEq;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 pub type RequirepassProvider = Arc<dyn Fn() -> Option<String> + Send + Sync>;
@@ -101,6 +101,35 @@ impl Cmd for AuthCmd {
             }
         }
     }
+
+    fn execute_typed(&self, client: &Client, _storage: Arc<Storage>) -> Option<CommandResult> {
+        use crate::error::{AuthenticationError, CommandError};
+
+        let argv = client.argv();
+        Some(match argv.len() {
+            2 => {
+                let password = &argv[1];
+                match (self.requirepass_provider)() {
+                    Some(requirepass) if bool::from(password.ct_eq(requirepass.as_bytes())) => {
+                        client.set_authenticated(true);
+                        Ok(RespData::SimpleString("OK".into()))
+                    }
+                    Some(_) => Err(CommandError::Authentication(
+                        AuthenticationError::WrongPassword,
+                    )),
+                    None => Err(CommandError::Authentication(
+                        AuthenticationError::PasswordNotConfigured,
+                    )),
+                }
+            }
+            3 => Err(CommandError::Authentication(
+                AuthenticationError::AclNotSupported,
+            )),
+            _ => Err(CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
 }
 
 #[allow(clippy::unwrap_used)]
@@ -164,6 +193,26 @@ mod tests {
         assert!(!client.is_authenticated());
         let reply = reply_text(&client);
         assert!(reply.starts_with("-WRONGPASS"), "unexpected reply: {reply}");
+    }
+
+    #[test]
+    fn typed_auth_returns_semantic_authentication_error() {
+        let cmd = auth_cmd_with(Some("secret"));
+        let client = make_client();
+        client.set_argv(&[b"auth".to_vec(), b"wrong".to_vec()]);
+
+        let result = cmd
+            .execute_typed(&client, make_storage())
+            .expect("AUTH supports typed execution");
+
+        assert!(matches!(
+            result,
+            Err(crate::error::CommandError::Authentication(
+                crate::error::AuthenticationError::WrongPassword
+            ))
+        ));
+        assert!(!client.is_authenticated());
+        assert_eq!(client.take_reply(), RespData::default());
     }
 
     #[test]
