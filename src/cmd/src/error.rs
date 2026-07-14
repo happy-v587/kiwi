@@ -105,6 +105,7 @@ pub enum ArgumentError {
     NotFloat,
     HashValueNotInteger,
     HashValueNotFloat,
+    InvalidScoreRange,
     OutOfRange,
     OffsetOutOfRange,
     InvalidExpireTime,

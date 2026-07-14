@@ -627,6 +627,34 @@ async fn storage_command_e2e_basic_sorted_set_commands_use_typed_replies() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_sorted_set_count_and_increment_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["ZINCRBY", "scores", "1.5", "member"]).await,
+        RespData::BulkString(Some(Bytes::from_static(b"1.5")))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["ZINCRBY", "scores", "0.5", "member"]).await,
+        RespData::BulkString(Some(Bytes::from_static(b"2")))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["ZCOUNT", "scores", "1", "2"]).await,
+        RespData::Integer(1)
+    );
+    let reply = send_command(&mut stream, &["ZCOUNT", "scores", "invalid", "2"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::MIN_MAX_NOT_FLOAT
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)
