@@ -1047,6 +1047,30 @@ async fn storage_command_e2e_bitpos_uses_typed_arguments_and_reply() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_bitop_uses_typed_storage_errors() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["SET", "bitmap", "a"]).await,
+        RespData::SimpleString(Bytes::from_static(b"OK"))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["BITOP", "NOT", "bitmap", "bitmap"]).await,
+        RespData::Integer(1)
+    );
+    let reply = send_command(&mut stream, &["BITOP", "NOT", "bitmap", "a", "b"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::BITOP_NOT_SINGLE_SOURCE
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)

@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 /// BITOP operation destkey key [key ...]
@@ -90,5 +90,25 @@ impl Cmd for BitopCmd {
             }
             Err(e) => client.set_storage_error(&e),
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 4 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let operation = String::from_utf8_lossy(&argv[1]).to_string();
+            let source_keys = argv[3..].iter().map(Vec::as_slice).collect::<Vec<_>>();
+            storage
+                .bitop(&operation, &argv[2], &source_keys)
+                .map(RespData::Integer)
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }

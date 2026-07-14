@@ -87,6 +87,9 @@ impl RedisErrorRenderer {
             CommandError::InvalidArgument(ArgumentError::BitMustBeZeroOrOne) => {
                 error_catalog::BIT_MUST_BE_1_OR_0.to_string()
             }
+            CommandError::InvalidArgument(ArgumentError::BitopNotSingleSource) => {
+                error_catalog::BITOP_NOT_SINGLE_SOURCE.to_string()
+            }
             CommandError::InvalidArgument(ArgumentError::OutOfRange) => {
                 error_catalog::VALUE_OUT_OF_RANGE_MUST_BE_POSITIVE.to_string()
             }

@@ -73,6 +73,7 @@ impl CommandError {
 
         if let StorageError::RedisErr { message, .. } = &error {
             return match message.as_str() {
+                error_catalog::SYNTAX_ERROR => Self::InvalidArgument(ArgumentError::Syntax),
                 error_catalog::VALUE_NOT_INTEGER => {
                     Self::InvalidArgument(ArgumentError::NotInteger)
                 }
@@ -89,6 +90,9 @@ impl CommandError {
                     Self::Numeric(NumericError::Overflow)
                 }
                 error_catalog::INCR_NAN_OR_INFINITY => Self::Numeric(NumericError::NaNOrInfinity),
+                error_catalog::BITOP_NOT_SINGLE_SOURCE => {
+                    Self::InvalidArgument(ArgumentError::BitopNotSingleSource)
+                }
                 _ => Self::Storage(Box::new(error)),
             };
         }
@@ -111,6 +115,7 @@ pub enum ArgumentError {
     BitOffsetNotInteger,
     BitNotInteger,
     BitMustBeZeroOrOne,
+    BitopNotSingleSource,
     OutOfRange,
     OffsetOutOfRange,
     InvalidExpireTime,
