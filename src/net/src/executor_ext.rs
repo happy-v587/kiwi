@@ -29,9 +29,10 @@ use cmd::ClientExt;
 use cmd::CmdFlags;
 use executor::CmdExecutor;
 use log::{debug, error};
-use runtime::DualRuntimeError;
+use runtime::{DualRuntimeError, ExecutionError};
 use storage::storage::Storage;
 
+use crate::error_response::RedisErrorRenderer;
 use crate::network_execution::NetworkCmdExecution;
 
 /// Extension trait for CmdExecutor to support network operations
@@ -127,21 +128,11 @@ async fn execute_generic_command(exec: &NetworkCmdExecution) -> Result<(), DualR
                 "Generic command execution failed for '{}': {}",
                 cmd_name_str, e
             );
-            let error_msg = format_storage_error(&cmd_name_str, &e);
-            exec.client.set_error(error_msg);
+            let execution_error = ExecutionError::from(&e);
+            exec.client
+                .set_reply(RedisErrorRenderer::render_execution(&execution_error));
         }
     }
 
     Ok(())
-}
-
-/// Maps cross-runtime failures to a sanitized client-visible RESP error string.
-///
-/// Internal details are logged by the caller; this function never leaks
-/// component names, timeouts, or internal reasons to clients.
-fn format_storage_error(_command: &str, error: &DualRuntimeError) -> String {
-    match error {
-        DualRuntimeError::Timeout { .. } => error_catalog::COMMAND_TIMEOUT.to_string(),
-        _ => error_catalog::INTERNAL_SERVER_ERROR.to_string(),
-    }
 }

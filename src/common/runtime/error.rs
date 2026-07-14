@@ -95,6 +95,33 @@ pub enum DualRuntimeError {
     RecoveryFailed { mechanism: String, reason: String },
 }
 
+/// Compatibility mapping used while request dispatch still returns
+/// [`DualRuntimeError`]. The mapping is intentionally variant-only: no
+/// recovery or client-response decision depends on an error description.
+impl From<&DualRuntimeError> for ExecutionError {
+    fn from(error: &DualRuntimeError) -> Self {
+        match error {
+            DualRuntimeError::Timeout { timeout } => Self::Timeout { timeout: *timeout },
+            DualRuntimeError::Channel(_) => Self::ChannelClosed,
+            DualRuntimeError::Lifecycle(_) => Self::ShuttingDown,
+            DualRuntimeError::Configuration(_) | DualRuntimeError::RecoveryFailed { .. } => {
+                Self::WorkerStopped
+            }
+            DualRuntimeError::NetworkRuntime(_)
+            | DualRuntimeError::StorageRuntime(_)
+            | DualRuntimeError::HealthCheck(_)
+            | DualRuntimeError::Storage(_)
+            | DualRuntimeError::Io(_)
+            | DualRuntimeError::CircuitBreakerOpen { .. }
+            | DualRuntimeError::RuntimeIsolation { .. }
+            | DualRuntimeError::ErrorBoundary { .. }
+            | DualRuntimeError::FaultIsolation { .. } => Self::Unavailable {
+                stage: "runtime dispatch",
+            },
+        }
+    }
+}
+
 impl DualRuntimeError {
     /// Create a network runtime error
     pub fn network_runtime<S: Into<String>>(msg: S) -> Self {
@@ -364,6 +391,22 @@ mod tests {
             ExecutionError::Unavailable {
                 stage: "storage dispatch"
             },
+            ExecutionError::Unavailable { .. }
+        ));
+    }
+
+    #[test]
+    fn execution_error_maps_legacy_runtime_variants_without_message_parsing() {
+        assert!(matches!(
+            ExecutionError::from(&DualRuntimeError::timeout(Duration::from_secs(1))),
+            ExecutionError::Timeout { .. }
+        ));
+        assert!(matches!(
+            ExecutionError::from(&DualRuntimeError::channel("closed")),
+            ExecutionError::ChannelClosed
+        ));
+        assert!(matches!(
+            ExecutionError::from(&DualRuntimeError::circuit_breaker_open("open")),
             ExecutionError::Unavailable { .. }
         ));
     }
