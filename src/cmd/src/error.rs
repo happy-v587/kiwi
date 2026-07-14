@@ -36,6 +36,9 @@ pub enum CommandError {
     #[error("invalid command argument")]
     InvalidArgument(ArgumentError),
 
+    #[error("numeric command failed")]
+    Numeric(NumericError),
+
     #[error("authentication failed")]
     Authentication(AuthenticationError),
 
@@ -53,11 +56,29 @@ impl CommandError {
     /// Preserve storage details for server-side logging while keeping expected
     /// wrong-type failures as a Redis command semantic.
     pub fn storage(error: storage::error::Error) -> Self {
+        use storage::error::Error as StorageError;
+
         if error.is_wrong_type() {
-            Self::WrongType
-        } else {
-            Self::Storage(Box::new(error))
+            return Self::WrongType;
         }
+
+        if let StorageError::RedisErr { message, .. } = &error {
+            return match message.as_str() {
+                error_catalog::VALUE_NOT_INTEGER => {
+                    Self::InvalidArgument(ArgumentError::NotInteger)
+                }
+                error_catalog::VALUE_NOT_VALID_FLOAT => {
+                    Self::InvalidArgument(ArgumentError::NotFloat)
+                }
+                error_catalog::INCREMENT_DECREMENT_WOULD_OVERFLOW => {
+                    Self::Numeric(NumericError::Overflow)
+                }
+                error_catalog::INCR_NAN_OR_INFINITY => Self::Numeric(NumericError::NaNOrInfinity),
+                _ => Self::Storage(Box::new(error)),
+            };
+        }
+
+        Self::Storage(Box::new(error))
     }
 }
 
@@ -69,6 +90,14 @@ pub enum ArgumentError {
     NotFloat,
     OutOfRange,
     InvalidCursor,
+}
+
+/// Reusable categories for numeric operations whose operands were valid but
+/// the requested calculation cannot be represented.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NumericError {
+    Overflow,
+    NaNOrInfinity,
 }
 
 /// Reusable categories for authentication failures.

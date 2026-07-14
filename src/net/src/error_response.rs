@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use cmd::error::{ArgumentError, AuthenticationError, CommandError};
+use cmd::error::{ArgumentError, AuthenticationError, CommandError, NumericError};
 use resp::{HelloError, RespData};
 use runtime::ExecutionError;
 
@@ -68,6 +68,12 @@ impl RedisErrorRenderer {
             CommandError::InvalidArgument(ArgumentError::InvalidCursor) => {
                 error_catalog::INVALID_CURSOR.to_string()
             }
+            CommandError::Numeric(NumericError::Overflow) => {
+                error_catalog::INCREMENT_DECREMENT_WOULD_OVERFLOW.to_string()
+            }
+            CommandError::Numeric(NumericError::NaNOrInfinity) => {
+                error_catalog::INCR_NAN_OR_INFINITY.to_string()
+            }
             CommandError::Authentication(AuthenticationError::Required) => {
                 error_catalog::NOAUTH.to_string()
             }
@@ -98,7 +104,7 @@ impl RedisErrorRenderer {
 
 #[cfg(test)]
 mod tests {
-    use cmd::error::{ArgumentError, AuthenticationError, CommandError};
+    use cmd::error::{ArgumentError, AuthenticationError, CommandError, NumericError};
     use resp::{HelloError, RespEncode, RespVersion, encode::RespEncoder};
     use runtime::ExecutionError;
 
@@ -125,6 +131,10 @@ mod tests {
         assert_eq!(
             render(CommandError::InvalidArgument(ArgumentError::Syntax)),
             b"-ERR syntax error\r\n".as_slice()
+        );
+        assert_eq!(
+            render(CommandError::Numeric(NumericError::Overflow)),
+            b"-ERR increment or decrement would overflow\r\n".as_slice()
         );
         assert_eq!(
             render(CommandError::Authentication(AuthenticationError::Required)),
