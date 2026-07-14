@@ -214,6 +214,39 @@ async fn storage_command_e2e_set_get_round_trip() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["INCR", "counter"]).await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["DECR", "counter"]).await,
+        RespData::Integer(0)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SET", "not-a-number", "text"]).await,
+        RespData::SimpleString(Bytes::from_static(b"OK"))
+    );
+
+    let reply = send_command(&mut stream, &["INCR", "not-a-number"]).await;
+    assert!(
+        matches!(reply, RespData::Error(_)),
+        "expected error, got {reply:?}"
+    );
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::VALUE_NOT_INTEGER
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_get_wrong_type_is_rendered_at_network_boundary() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)
