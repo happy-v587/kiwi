@@ -17,6 +17,7 @@
 
 use cmd::error::{ArgumentError, AuthenticationError, CommandError};
 use resp::{HelloError, RespData};
+use runtime::ExecutionError;
 
 /// Converts typed request failures to Redis-compatible RESP error replies.
 ///
@@ -27,6 +28,21 @@ pub struct RedisErrorRenderer;
 impl RedisErrorRenderer {
     pub fn render_command(error: &CommandError) -> RespData {
         RespData::error(Self::command_message(error))
+    }
+
+    /// Render dispatch failures without exposing runtime implementation details.
+    pub fn render_execution(error: &ExecutionError) -> RespData {
+        match error {
+            ExecutionError::Command(error) => Self::render_command(error),
+            ExecutionError::Timeout { .. } => RespData::error(error_catalog::COMMAND_TIMEOUT),
+            ExecutionError::Unavailable { .. }
+            | ExecutionError::Overloaded
+            | ExecutionError::ChannelClosed
+            | ExecutionError::ShuttingDown
+            | ExecutionError::WorkerStopped => {
+                RespData::error(error_catalog::INTERNAL_SERVER_ERROR)
+            }
+        }
     }
 
     fn command_message(error: &CommandError) -> String {
@@ -76,6 +92,7 @@ impl RedisErrorRenderer {
 mod tests {
     use cmd::error::{ArgumentError, AuthenticationError, CommandError};
     use resp::{HelloError, RespEncode, RespVersion, encode::RespEncoder};
+    use runtime::ExecutionError;
 
     use super::RedisErrorRenderer;
 
@@ -125,5 +142,25 @@ mod tests {
             render(CommandError::Hello(HelloError::AuthenticationRequired)),
             b"-NOAUTH HELLO must be called with the client already authenticated, otherwise the HELLO <proto> AUTH <user> <pass> option can be used to authenticate the client and select the RESP protocol version at the same time\r\n".as_slice()
         );
+    }
+
+    #[test]
+    fn renders_execution_errors_as_sanitized_resp_bytes() {
+        assert_eq!(
+            render_execution(ExecutionError::Timeout {
+                timeout: std::time::Duration::from_secs(1),
+            }),
+            b"-ERR command timeout\r\n".as_slice()
+        );
+        assert_eq!(
+            render_execution(ExecutionError::ChannelClosed),
+            b"-ERR internal server error\r\n".as_slice()
+        );
+    }
+
+    fn render_execution(error: ExecutionError) -> bytes::Bytes {
+        let mut encoder = RespEncoder::new(RespVersion::RESP2);
+        encoder.encode_resp_data(&RedisErrorRenderer::render_execution(&error));
+        encoder.get_response()
     }
 }
