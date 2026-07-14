@@ -16,11 +16,10 @@
 // limitations under the License.
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use snafu::ensure;
 
 use crate::{
     delegate_internal_value, delegate_parsed_value,
-    error::{InvalidFormatSnafu, Result},
+    error::{Error, Result},
     format_base_value::{DataType, InternalValue, ParsedInternalValue},
     storage_define::{SUFFIX_RESERVE_LENGTH, TIMESTAMP_LENGTH},
 };
@@ -77,16 +76,16 @@ impl ParsedBaseDataValue {
         T: Into<BytesMut>,
     {
         let value: BytesMut = internal_value.into();
-        ensure!(
-            value.len() >= Self::BASEDATAVALUESUFFIXLENGTH,
-            InvalidFormatSnafu {
-                message: format!(
+        if value.len() < Self::BASEDATAVALUESUFFIXLENGTH {
+            return Err(Error::corruption(
+                "decode base data value",
+                format!(
                     "invalid base data value length: {} < {}",
                     value.len(),
                     Self::BASEDATAVALUESUFFIXLENGTH
-                )
-            }
-        );
+                ),
+            ));
+        }
 
         let user_value_len = value.len() - Self::BASEDATAVALUESUFFIXLENGTH;
         let user_value_range = 0..user_value_len;
@@ -95,16 +94,16 @@ impl ParsedBaseDataValue {
         let reserve_range = user_value_len..reserve_end;
 
         let mut time_reader = &value[reserve_end..];
-        ensure!(
-            time_reader.len() >= TIMESTAMP_LENGTH,
-            InvalidFormatSnafu {
-                message: format!(
+        if time_reader.len() < TIMESTAMP_LENGTH {
+            return Err(Error::corruption(
+                "decode base data value",
+                format!(
                     "invalid base data value length: {} < {}",
                     time_reader.len(),
                     TIMESTAMP_LENGTH
-                )
-            }
-        );
+                ),
+            ));
+        }
         let ctime = time_reader.get_u64_le();
 
         Ok(Self {
@@ -149,6 +148,7 @@ impl ParsedBaseDataValue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::{Error, StorageError};
 
     const TEST_CTIME: u64 = 1620000000;
     const TEST_VALUE: &[u8] = b"test_data";
@@ -310,7 +310,16 @@ mod tests {
         buf.put_slice(&[0u8; SUFFIX_RESERVE_LENGTH + TIMESTAMP_LENGTH - 1]); // Just short of required length
 
         let parsed = ParsedBaseDataValue::new(buf);
-        assert!(parsed.is_err());
+        assert!(matches!(
+            parsed,
+            Err(Error::Typed {
+                error: StorageError::Corruption {
+                    operation: "decode base data value",
+                    ..
+                },
+                ..
+            })
+        ));
     }
 
     #[test]
