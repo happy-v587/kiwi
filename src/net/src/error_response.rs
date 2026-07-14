@@ -53,6 +53,7 @@ impl RedisErrorRenderer {
                 command,
                 subcommand,
             } => error_catalog::unknown_command(command, subcommand),
+            CommandError::CrossSlot => error_catalog::CROSSSLOT.to_string(),
             CommandError::InvalidArgument(ArgumentError::Syntax) => {
                 error_catalog::SYNTAX_ERROR.to_string()
             }

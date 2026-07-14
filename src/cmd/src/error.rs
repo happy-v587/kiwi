@@ -33,6 +33,9 @@ pub enum CommandError {
     #[error("unknown subcommand {command} {subcommand}")]
     UnknownSubcommand { command: String, subcommand: String },
 
+    #[error("keys do not share a storage slot")]
+    CrossSlot,
+
     #[error("invalid command argument")]
     InvalidArgument(ArgumentError),
 
@@ -60,6 +63,12 @@ impl CommandError {
 
         if error.is_wrong_type() {
             return Self::WrongType;
+        }
+
+        if let StorageError::InvalidArgument { message, .. } = &error {
+            if message == error_catalog::CROSSSLOT {
+                return Self::CrossSlot;
+            }
         }
 
         if let StorageError::RedisErr { message, .. } = &error {

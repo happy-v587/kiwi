@@ -484,6 +484,60 @@ async fn storage_command_e2e_basic_set_commands_use_typed_replies() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_set_operations_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["SADD", "set", "a", "b"]).await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SDIFF", "set", "set"]).await,
+        RespData::Array(Some(vec![]))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SINTER", "set", "set"]).await,
+        RespData::Array(Some(vec![
+            RespData::BulkString(Some(Bytes::from_static(b"a"))),
+            RespData::BulkString(Some(Bytes::from_static(b"b"))),
+        ]))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SADD", "other", "b", "c"]).await,
+        RespData::Integer(2)
+    );
+    let reply = send_command(&mut stream, &["SDIFF", "set", "other"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::CROSSSLOT
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SUNION", "set", "set"]).await,
+        RespData::Array(Some(vec![
+            RespData::BulkString(Some(Bytes::from_static(b"a"))),
+            RespData::BulkString(Some(Bytes::from_static(b"b"))),
+        ]))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SINTERSTORE", "set", "set", "set"]).await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SUNIONSTORE", "set", "set", "set"]).await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SDIFFSTORE", "set", "set", "set"]).await,
+        RespData::Integer(0)
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)
