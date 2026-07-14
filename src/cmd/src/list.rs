@@ -903,6 +903,24 @@ impl Cmd for LPushxCmd {
             }
         }
     }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 3 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            storage
+                .lpushx(&argv[1], &argv[2..])
+                .map(RespData::Integer)
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Clone, Default)]
@@ -947,6 +965,24 @@ impl Cmd for RPushxCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 3 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            storage
+                .rpushx(&argv[1], &argv[2..])
+                .map(RespData::Integer)
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 
@@ -1006,6 +1042,34 @@ impl Cmd for LInsertCmd {
             }
         }
     }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            5 => {
+                let position = if argv[2].eq_ignore_ascii_case(b"BEFORE") {
+                    BeforeOrAfter::Before
+                } else if argv[2].eq_ignore_ascii_case(b"AFTER") {
+                    BeforeOrAfter::After
+                } else {
+                    return Some(Err(crate::error::CommandError::InvalidArgument(
+                        crate::error::ArgumentError::Syntax,
+                    )));
+                };
+                storage
+                    .linsert(&argv[1], position, &argv[3], &argv[4])
+                    .map(RespData::Integer)
+                    .map_err(crate::error::CommandError::storage)
+            }
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Clone, Default)]
@@ -1058,6 +1122,23 @@ impl Cmd for RPoplpushCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            3 => storage
+                .rpoplpush(&argv[1], &argv[2])
+                .map(|value| RespData::BulkString(value.map(Bytes::from)))
+                .map_err(crate::error::CommandError::storage),
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 

@@ -956,6 +956,45 @@ async fn storage_command_e2e_list_mutation_commands_use_typed_replies() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_list_conditional_and_move_commands_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["LPUSHX", "missing", "value"]).await,
+        RespData::Integer(0)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["RPUSH", "list", "pivot", "last"]).await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["LPUSHX", "list", "first"]).await,
+        RespData::Integer(3)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["RPUSHX", "list", "tail"]).await,
+        RespData::Integer(4)
+    );
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["LINSERT", "list", "AFTER", "pivot", "inserted"]
+        )
+        .await,
+        RespData::Integer(5)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["RPOPLPUSH", "list", "list"]).await,
+        RespData::BulkString(Some(Bytes::from_static(b"tail")))
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)
