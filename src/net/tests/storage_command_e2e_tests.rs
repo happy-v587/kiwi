@@ -264,6 +264,60 @@ async fn storage_command_e2e_hash_get_and_set_use_typed_replies() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_hash_collection_commands_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["HSET", "hash", "first", "one", "second", "two"],
+        )
+        .await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HEXISTS", "hash", "first"]).await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HLEN", "hash"]).await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HKEYS", "hash"]).await,
+        RespData::Array(Some(vec![
+            RespData::BulkString(Some(Bytes::from_static(b"first"))),
+            RespData::BulkString(Some(Bytes::from_static(b"second"))),
+        ]))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HVALS", "hash"]).await,
+        RespData::Array(Some(vec![
+            RespData::BulkString(Some(Bytes::from_static(b"one"))),
+            RespData::BulkString(Some(Bytes::from_static(b"two"))),
+        ]))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HGETALL", "hash"]).await,
+        RespData::Array(Some(vec![
+            RespData::BulkString(Some(Bytes::from_static(b"first"))),
+            RespData::BulkString(Some(Bytes::from_static(b"one"))),
+            RespData::BulkString(Some(Bytes::from_static(b"second"))),
+            RespData::BulkString(Some(Bytes::from_static(b"two"))),
+        ]))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HDEL", "hash", "first", "missing"]).await,
+        RespData::Integer(1)
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)
