@@ -19,7 +19,7 @@ use bytes::{BufMut, Bytes, BytesMut};
 
 use crate::storage_define::seek_userkey_delim;
 use crate::{
-    error::Result,
+    error::{Error, Result},
     storage_define::{
         ENCODED_KEY_DELIM_SIZE, PREFIX_RESERVE_LENGTH, SUFFIX_RESERVE_LENGTH, decode_user_key,
         encode_user_key,
@@ -99,6 +99,16 @@ impl ParsedMemberDataKey {
         let mut key_str = BytesMut::new();
 
         let start_idx = PREFIX_RESERVE_LENGTH;
+        let min_len = PREFIX_RESERVE_LENGTH
+            + ENCODED_KEY_DELIM_SIZE
+            + size_of::<u64>()
+            + SUFFIX_RESERVE_LENGTH;
+        if encoded_key.len() < min_len {
+            return Err(Error::corruption(
+                "decode member data key",
+                format!("encoded key too short: {} < {min_len}", encoded_key.len()),
+            ));
+        }
         let end_idx = encoded_key.len() - SUFFIX_RESERVE_LENGTH;
 
         // reserve1
@@ -108,10 +118,23 @@ impl ParsedMemberDataKey {
 
         // key
         let key_end_idx = start_idx + seek_userkey_delim(&encoded_key[start_idx..]);
-        decode_user_key(&encoded_key[start_idx..key_end_idx], &mut key_str)?;
+        let version_end_idx = key_end_idx
+            .checked_add(size_of::<u64>())
+            .filter(|end| *end <= end_idx)
+            .ok_or_else(|| {
+                Error::corruption(
+                    "decode member data key",
+                    "encoded key has no complete key delimiter and version",
+                )
+            })?;
+        decode_user_key(&encoded_key[start_idx..key_end_idx], &mut key_str).map_err(|err| {
+            Error::corruption(
+                "decode member data key",
+                format!("invalid encoded user key: {err}"),
+            )
+        })?;
 
         // version
-        let version_end_idx = key_end_idx + size_of::<u64>();
         let version_slice = &encoded_key[key_end_idx..version_end_idx];
         let version = u64::from_le_bytes(version_slice.try_into().expect("slice length mismatch"));
 
@@ -150,6 +173,23 @@ impl ParsedMemberDataKey {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::{Error, StorageError};
+
+    #[test]
+    fn parsed_member_data_key_rejects_short_persisted_key_as_corruption() {
+        let parsed = ParsedMemberDataKey::new(&[]);
+
+        assert!(matches!(
+            parsed,
+            Err(Error::Typed {
+                error: StorageError::Corruption {
+                    operation: "decode member data key",
+                    ..
+                },
+                ..
+            })
+        ));
+    }
 
     #[test]
     fn mv_test_member_data_key_encode_and_decode() {
