@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -75,5 +75,27 @@ impl Cmd for IncrbyCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            3 => match String::from_utf8_lossy(&argv[2]).parse::<i64>() {
+                Ok(increment) => match storage.incr_decr(&argv[1], increment) {
+                    Ok(value) => Ok(RespData::Integer(value)),
+                    Err(error) => Err(crate::error::CommandError::storage(error)),
+                },
+                Err(_) => Err(crate::error::CommandError::InvalidArgument(
+                    crate::error::ArgumentError::NotInteger,
+                )),
+            },
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }

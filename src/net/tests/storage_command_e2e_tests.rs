@@ -247,6 +247,47 @@ async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_increment_by_commands_validate_arguments() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["INCRBY", "counter", "3"]).await,
+        RespData::Integer(3)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["DECRBY", "counter", "2"]).await,
+        RespData::Integer(1)
+    );
+
+    let reply = send_command(&mut stream, &["INCRBY", "counter", "invalid"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::VALUE_NOT_INTEGER
+    );
+
+    let reply = send_command(&mut stream, &["DECRBY", "counter", "-9223372036854775808"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::INCREMENT_DECREMENT_WOULD_OVERFLOW
+    );
+
+    assert_eq!(
+        send_command(&mut stream, &["INCRBYFLOAT", "float", "1.5"]).await,
+        RespData::BulkString(Some(Bytes::from_static(b"1.5")))
+    );
+    let reply = send_command(&mut stream, &["INCRBYFLOAT", "float", "NaN"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::INCR_NAN_OR_INFINITY
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_get_wrong_type_is_rendered_at_network_boundary() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)
