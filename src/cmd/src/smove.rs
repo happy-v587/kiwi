@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -70,6 +70,23 @@ impl Cmd for SmoveCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            4 => storage
+                .smove(&argv[1], &argv[2], &argv[3])
+                .map(|moved| RespData::Integer(i64::from(moved)))
+                .map_err(crate::error::CommandError::storage),
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 

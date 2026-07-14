@@ -538,6 +538,56 @@ async fn storage_command_e2e_set_operations_use_typed_replies() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_set_random_move_and_scan_commands_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["SADD", "set", "only"]).await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SRANDMEMBER", "set"]).await,
+        RespData::BulkString(Some(Bytes::from_static(b"only")))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SRANDMEMBER", "set", "1"]).await,
+        RespData::Array(Some(vec![RespData::BulkString(Some(Bytes::from_static(
+            b"only"
+        ),))]))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SMOVE", "set", "set", "only"]).await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["SSCAN", "set", "0", "MATCH", "only*", "COUNT", "10"]
+        )
+        .await,
+        RespData::Array(Some(vec![
+            RespData::BulkString(Some(Bytes::from_static(b"0"))),
+            RespData::Array(Some(vec![RespData::BulkString(Some(Bytes::from_static(
+                b"only",
+            )))])),
+        ]))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SPOP", "set", "0"]).await,
+        RespData::Array(Some(vec![]))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["SPOP", "set"]).await,
+        RespData::BulkString(Some(Bytes::from_static(b"only")))
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)

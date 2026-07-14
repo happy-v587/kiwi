@@ -754,6 +754,13 @@ impl Redis {
             return Ok(false);
         }
 
+        // Redis treats moving a member within the same set as a successful
+        // no-op. Returning here also avoids deleting the member before the
+        // destination-membership check observes that it already exists.
+        if source == destination {
+            return Ok(true);
+        }
+
         // Handle destination set
         let dest_meta_val = db.get_cf(&cf_meta, &dest_meta_key).context(RocksSnafu)?;
         let (mut dest_meta, dest_version, dest_exists) = if let Some(dest_val) = dest_meta_val {

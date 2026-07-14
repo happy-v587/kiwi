@@ -17,11 +17,12 @@
 
 use std::sync::Arc;
 
+use bytes::Bytes;
 use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -105,6 +106,39 @@ impl Cmd for SrandmemberCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            2 => storage
+                .srandmember(&argv[1], None)
+                .map(|members| RespData::BulkString(members.into_iter().next().map(Bytes::from)))
+                .map_err(crate::error::CommandError::storage),
+            3 => match String::from_utf8_lossy(&argv[2]).parse::<i32>() {
+                Ok(count) => storage
+                    .srandmember(&argv[1], Some(count))
+                    .map(|members| {
+                        RespData::Array(Some(
+                            members
+                                .into_iter()
+                                .map(|member| RespData::BulkString(Some(Bytes::from(member))))
+                                .collect(),
+                        ))
+                    })
+                    .map_err(crate::error::CommandError::storage),
+                Err(_) => Err(crate::error::CommandError::InvalidArgument(
+                    crate::error::ArgumentError::NotInteger,
+                )),
+            },
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 
