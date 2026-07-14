@@ -68,6 +68,12 @@ impl RedisErrorRenderer {
             CommandError::InvalidArgument(ArgumentError::OffsetOutOfRange) => {
                 error_catalog::OFFSET_OUT_OF_RANGE.to_string()
             }
+            CommandError::InvalidArgument(ArgumentError::InvalidExpireTime) => {
+                error_catalog::INVALID_EXPIRE_TIME.to_string()
+            }
+            CommandError::InvalidArgument(ArgumentError::InvalidPexpireTime) => {
+                error_catalog::INVALID_EXPIRE_TIME_PSETEX.to_string()
+            }
             CommandError::InvalidArgument(ArgumentError::InvalidCursor) => {
                 error_catalog::INVALID_CURSOR.to_string()
             }

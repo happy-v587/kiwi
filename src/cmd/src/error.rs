@@ -90,6 +90,8 @@ pub enum ArgumentError {
     NotFloat,
     OutOfRange,
     OffsetOutOfRange,
+    InvalidExpireTime,
+    InvalidPexpireTime,
     InvalidCursor,
 }
 

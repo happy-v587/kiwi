@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -101,5 +101,32 @@ impl Cmd for PsetexCmd {
             }
             Err(e) => client.set_storage_error(&e),
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            4 => match String::from_utf8_lossy(&argv[2]).parse::<i64>() {
+                Ok(milliseconds) if milliseconds > 0 && milliseconds <= i64::MAX / 1_000 => {
+                    match storage.psetex(&argv[1], milliseconds, &argv[3]) {
+                        Ok(()) => Ok(RespData::SimpleString("OK".into())),
+                        Err(error) => Err(crate::error::CommandError::storage(error)),
+                    }
+                }
+                Ok(_) => Err(crate::error::CommandError::InvalidArgument(
+                    crate::error::ArgumentError::InvalidPexpireTime,
+                )),
+                Err(_) => Err(crate::error::CommandError::InvalidArgument(
+                    crate::error::ArgumentError::NotInteger,
+                )),
+            },
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
