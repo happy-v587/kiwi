@@ -214,6 +214,29 @@ async fn storage_command_e2e_set_get_round_trip() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_append_and_strlen_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["APPEND", "text", "kiwi"]).await,
+        RespData::Integer(4)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["APPEND", "text", "db"]).await,
+        RespData::Integer(6)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["STRLEN", "text"]).await,
+        RespData::Integer(6)
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)
