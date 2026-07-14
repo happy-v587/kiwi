@@ -861,6 +861,41 @@ async fn storage_command_e2e_sorted_set_store_aggregations_use_typed_replies() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_basic_list_commands_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["RPUSH", "list", "second", "third"]).await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["LPUSH", "list", "first"]).await,
+        RespData::Integer(3)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["LLEN", "list"]).await,
+        RespData::Integer(3)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["LINDEX", "list", "1"]).await,
+        RespData::BulkString(Some(Bytes::from_static(b"second")))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["LRANGE", "list", "0", "-1"]).await,
+        RespData::Array(Some(vec![
+            RespData::BulkString(Some(Bytes::from_static(b"first"))),
+            RespData::BulkString(Some(Bytes::from_static(b"second"))),
+            RespData::BulkString(Some(Bytes::from_static(b"third"))),
+        ]))
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)

@@ -25,7 +25,7 @@ use resp::RespData;
 use storage::BeforeOrAfter;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 /// LPUSH command - Insert all the specified values at the head of the list stored at key
@@ -71,6 +71,24 @@ impl Cmd for LPushCmd {
             }
         }
     }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 3 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            storage
+                .lpush(&argv[1], &argv[2..])
+                .map(RespData::Integer)
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
 }
 
 /// RPUSH command - Insert all the specified values at the tail of the list stored at key
@@ -115,6 +133,24 @@ impl Cmd for RPushCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 3 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            storage
+                .rpush(&argv[1], &argv[2..])
+                .map(RespData::Integer)
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 
@@ -306,6 +342,23 @@ impl Cmd for LLenCmd {
             }
         }
     }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            2 => storage
+                .llen(&argv[1])
+                .map(RespData::Integer)
+                .map_err(crate::error::CommandError::storage),
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
 }
 
 /// LINDEX command - Returns the element at index in the list stored at key
@@ -361,6 +414,28 @@ impl Cmd for LIndexCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            3 => match String::from_utf8_lossy(&argv[2]).parse::<i64>() {
+                Ok(index) => storage
+                    .lindex(&argv[1], index)
+                    .map(|value| RespData::BulkString(value.map(Bytes::from)))
+                    .map_err(crate::error::CommandError::storage),
+                Err(_) => Err(crate::error::CommandError::InvalidArgument(
+                    crate::error::ArgumentError::NotInteger,
+                )),
+            },
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 
@@ -426,6 +501,38 @@ impl Cmd for LRangeCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            4 => match (
+                String::from_utf8_lossy(&argv[2]).parse::<i64>(),
+                String::from_utf8_lossy(&argv[3]).parse::<i64>(),
+            ) {
+                (Ok(start), Ok(stop)) => storage
+                    .lrange(&argv[1], start, stop)
+                    .map(|values| {
+                        RespData::Array(Some(
+                            values
+                                .into_iter()
+                                .map(|value| RespData::BulkString(Some(Bytes::from(value))))
+                                .collect(),
+                        ))
+                    })
+                    .map_err(crate::error::CommandError::storage),
+                _ => Err(crate::error::CommandError::InvalidArgument(
+                    crate::error::ArgumentError::NotInteger,
+                )),
+            },
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 
