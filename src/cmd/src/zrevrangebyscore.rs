@@ -17,8 +17,10 @@
 
 use std::sync::Arc;
 
+use crate::CommandResult;
 use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
+use bytes::Bytes;
 use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
@@ -123,5 +125,73 @@ impl Cmd for ZrevrangebyscoreCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 4 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let (max_score, min_score) = match (
+                String::from_utf8_lossy(&argv[2]).parse::<f64>(),
+                String::from_utf8_lossy(&argv[3]).parse::<f64>(),
+            ) {
+                (Ok(max_score), Ok(min_score)) => (max_score, min_score),
+                _ => {
+                    return Some(Err(crate::error::CommandError::InvalidArgument(
+                        crate::error::ArgumentError::InvalidScoreRange,
+                    )));
+                }
+            };
+            let mut with_scores = false;
+            let mut offset = None;
+            let mut count = None;
+            let mut index = 4;
+            while index < argv.len() {
+                if argv[index].eq_ignore_ascii_case(b"WITHSCORES") {
+                    with_scores = true;
+                    index += 1;
+                } else if argv[index].eq_ignore_ascii_case(b"LIMIT") && index + 2 < argv.len() {
+                    offset = match String::from_utf8_lossy(&argv[index + 1]).parse::<i64>() {
+                        Ok(offset) => Some(offset),
+                        Err(_) => {
+                            return Some(Err(crate::error::CommandError::InvalidArgument(
+                                crate::error::ArgumentError::NotInteger,
+                            )));
+                        }
+                    };
+                    count = match String::from_utf8_lossy(&argv[index + 2]).parse::<i64>() {
+                        Ok(count) => Some(count),
+                        Err(_) => {
+                            return Some(Err(crate::error::CommandError::InvalidArgument(
+                                crate::error::ArgumentError::NotInteger,
+                            )));
+                        }
+                    };
+                    index += 3;
+                } else {
+                    return Some(Err(crate::error::CommandError::InvalidArgument(
+                        crate::error::ArgumentError::Syntax,
+                    )));
+                }
+            }
+            storage
+                .zrevrangebyscore(&argv[1], max_score, min_score, with_scores, offset, count)
+                .map(|members| {
+                    RespData::Array(Some(
+                        members
+                            .into_iter()
+                            .map(|member| RespData::BulkString(Some(Bytes::from(member))))
+                            .collect(),
+                    ))
+                })
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
