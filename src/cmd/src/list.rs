@@ -673,6 +673,28 @@ impl Cmd for LSetCmd {
             }
         }
     }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            4 => match String::from_utf8_lossy(&argv[2]).parse::<i64>() {
+                Ok(index) => storage
+                    .lset(&argv[1], index, argv[3].clone())
+                    .map(|()| RespData::SimpleString(Bytes::from_static(b"OK")))
+                    .map_err(crate::error::CommandError::storage),
+                Err(_) => Err(crate::error::CommandError::InvalidArgument(
+                    crate::error::ArgumentError::NotInteger,
+                )),
+            },
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
 }
 
 /// LTRIM command - Trims the list to the specified range
@@ -734,6 +756,31 @@ impl Cmd for LTrimCmd {
             }
         }
     }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            4 => match (
+                String::from_utf8_lossy(&argv[2]).parse::<i64>(),
+                String::from_utf8_lossy(&argv[3]).parse::<i64>(),
+            ) {
+                (Ok(start), Ok(stop)) => storage
+                    .ltrim(&argv[1], start, stop)
+                    .map(|()| RespData::SimpleString(Bytes::from_static(b"OK")))
+                    .map_err(crate::error::CommandError::storage),
+                _ => Err(crate::error::CommandError::InvalidArgument(
+                    crate::error::ArgumentError::NotInteger,
+                )),
+            },
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
 }
 
 /// LREM command - Removes the first count occurrences of elements equal to value from the list
@@ -788,6 +835,28 @@ impl Cmd for LRemCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            4 => match String::from_utf8_lossy(&argv[2]).parse::<i64>() {
+                Ok(count) => storage
+                    .lrem(&argv[1], count, &argv[3])
+                    .map(RespData::Integer)
+                    .map_err(crate::error::CommandError::storage),
+                Err(_) => Err(crate::error::CommandError::InvalidArgument(
+                    crate::error::ArgumentError::NotInteger,
+                )),
+            },
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 
