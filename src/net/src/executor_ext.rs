@@ -25,8 +25,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::LazyLock;
 
-use cmd::ClientExt;
-use cmd::CmdFlags;
+use client::Client;
+use cmd::error::CommandError;
+use cmd::{ClientExt, Cmd, CmdFlags};
 use executor::CmdExecutor;
 use log::{debug, error};
 use runtime::DualRuntimeError;
@@ -56,8 +57,11 @@ impl CmdExecutorNetworkExt for CmdExecutor {
             // Check argument count first
             let argv = exec.client.argv();
             if !exec.cmd.check_arg(argv.len()) {
-                let error_msg = error_catalog::wrong_number(&cmd_name);
-                exec.client.set_error(error_msg);
+                exec.client.set_reply(RedisErrorRenderer::render_command(
+                    &CommandError::WrongArity {
+                        command: exec.cmd.name().to_string(),
+                    },
+                ));
                 return Ok(());
             }
 
@@ -77,12 +81,10 @@ impl CmdExecutorNetworkExt for CmdExecutor {
                 }
             }
 
-            // Legacy commands still use this hook for validation and routing
-            // state. Typed commands validate from argv inside execute_typed,
-            // so invoking the old hook would let it write a reply before the
-            // structured error reaches the network rendering boundary.
-            if !exec.cmd.uses_typed_execution() && !exec.cmd.do_initial(&exec.client) {
-                debug!("Command initial check failed for: {}", cmd_name);
+            if !exec.cmd.uses_typed_execution() {
+                error!("Command '{}' is missing typed execution", cmd_name);
+                exec.client
+                    .set_reply(RedisErrorRenderer::render_command(&CommandError::Internal));
                 return Ok(());
             }
 
@@ -118,12 +120,36 @@ async fn execute_local_command(exec: &NetworkCmdExecution) -> Result<(), DualRun
         };
         exec.client.set_reply(reply);
     } else {
-        // Legacy commands still write their reply through Client. This branch
-        // disappears as command implementations migrate to execute_typed.
-        exec.cmd
-            .execute(exec.client.as_ref(), Arc::clone(&LOCAL_DUMMY_STORAGE));
+        exec.client
+            .set_reply(RedisErrorRenderer::render_command(&CommandError::Internal));
     }
     Ok(())
+}
+
+/// Execute a command against a directly-owned [`Storage`] instance.
+///
+/// This is used only by the legacy single-runtime TCP, Unix, and optimized
+/// handlers. It keeps those compatibility entry points on the same typed
+/// command/error path as the dual-runtime server.
+pub(crate) fn execute_direct_typed_command(
+    client: &Client,
+    storage: Arc<Storage>,
+    command: &dyn Cmd,
+) {
+    let result = if command.check_arg(client.argv().len()) {
+        command
+            .execute_typed(client, storage)
+            .unwrap_or(Err(CommandError::Internal))
+    } else {
+        Err(CommandError::WrongArity {
+            command: command.name().to_string(),
+        })
+    };
+
+    client.set_reply(match result {
+        Ok(reply) => reply,
+        Err(error) => RedisErrorRenderer::render_command(&error),
+    });
 }
 
 async fn execute_generic_command(exec: &NetworkCmdExecution) -> Result<(), DualRuntimeError> {
@@ -156,4 +182,41 @@ async fn execute_generic_command(exec: &NetworkCmdExecution) -> Result<(), DualR
     }
 
     Ok(())
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::execute_direct_typed_command;
+    use std::sync::Arc;
+
+    use client::{Client, StreamTrait};
+    use cmd::set::SetCmd;
+    use storage::storage::Storage;
+
+    struct TestStream;
+
+    #[async_trait::async_trait]
+    impl StreamTrait for TestStream {
+        async fn read(&mut self, _buf: &mut [u8]) -> Result<usize, std::io::Error> {
+            Ok(0)
+        }
+
+        async fn write(&mut self, _data: &[u8]) -> Result<usize, std::io::Error> {
+            Ok(0)
+        }
+    }
+
+    #[test]
+    fn direct_compatibility_path_renders_typed_errors() {
+        let client = Client::new(Box::new(TestStream));
+        client.set_argv(&[b"set".to_vec(), b"key".to_vec()]);
+
+        execute_direct_typed_command(&client, Arc::new(Storage::new(1, 0)), &SetCmd::new());
+
+        assert_eq!(
+            client.take_reply().as_string().expect("error string"),
+            error_catalog::wrong_number("set")
+        );
+    }
 }

@@ -20,12 +20,14 @@ use std::time::{Duration, Instant};
 
 use client::Client;
 use cmd::table::CmdTable;
-use executor::{CmdExecution, CmdExecutor};
+use executor::CmdExecutor;
 use log::{debug, warn};
 use resp::RespData;
 use storage::storage::Storage;
 use tokio::sync::{Semaphore, mpsc, oneshot};
 use tokio::time::timeout;
+
+use crate::executor_ext::execute_direct_typed_command;
 
 /// Configuration for pipeline processing
 #[derive(Debug, Clone)]
@@ -316,7 +318,7 @@ impl CommandPipeline {
         client: Arc<Client>,
         storage: Arc<Storage>,
         cmd_table: Arc<CmdTable>,
-        executor: Arc<CmdExecutor>,
+        _executor: Arc<CmdExecutor>,
     ) -> RespData {
         // Parse command from RespData
         if let RespData::Array(Some(params)) = data {
@@ -345,12 +347,7 @@ impl CommandPipeline {
             let cmd_name = String::from_utf8_lossy(&client.cmd_name()).to_lowercase();
 
             if let Some(cmd) = cmd_table.get(&cmd_name) {
-                let exec = CmdExecution {
-                    cmd: cmd.clone(),
-                    client: client.clone(),
-                    storage,
-                };
-                executor.execute(exec).await;
+                execute_direct_typed_command(&client, storage, cmd.as_ref());
                 client.take_reply()
             } else {
                 RespData::error(error_catalog::unknown_command_name(&cmd_name))

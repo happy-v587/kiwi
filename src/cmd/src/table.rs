@@ -214,6 +214,19 @@ mod tests {
     }
 
     #[test]
+    fn all_registered_commands_require_typed_execution() {
+        let table = create_command_table(Arc::new(|| None));
+
+        assert!(!table.is_empty());
+        for (name, command) in table {
+            assert!(
+                command.uses_typed_execution(),
+                "registered command '{name}' must use typed execution"
+            );
+        }
+    }
+
+    #[test]
     fn hello_command_returns_resp3_handshake() {
         let table = create_command_table(Arc::new(|| None));
         let command = table.get("hello").expect("HELLO should be registered");

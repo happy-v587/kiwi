@@ -22,20 +22,21 @@ use client::Client;
 use cmd::ClientExt;
 use cmd::CmdFlags;
 use cmd::table::CmdTable;
-use executor::{CmdExecution, CmdExecutor};
+use executor::CmdExecutor;
 use log::error;
 use resp::encode::RespEncoder;
 use resp::{Parse, RespData, RespEncode, RespParseResult};
 use storage::storage::Storage;
 use tokio::select;
 
+use crate::executor_ext::execute_direct_typed_command;
 use crate::storage_client::StorageClient;
 
 pub async fn process_connection(
     client: Arc<Client>,
     storage: Arc<Storage>,
     cmd_table: Arc<CmdTable>,
-    executor: Arc<CmdExecutor>,
+    _executor: Arc<CmdExecutor>,
 ) -> std::io::Result<()> {
     let mut buf = vec![0; 1024];
     let mut resp_parser = resp::RespParse::new(client.resp_version());
@@ -57,7 +58,7 @@ pub async fn process_connection(
                                     }
                                     let argv = params.iter().map(|p| if let RespData::BulkString(Some(d)) = p { d.to_vec() } else { vec![] }).collect::<Vec<Vec<u8>>>();
                                     client.set_argv(&argv);
-                                    handle_command(client.clone(), storage.clone(), cmd_table.clone(), executor.clone()).await;
+                                    handle_command(client.clone(), storage.clone(), cmd_table.clone()).await;
                                     // Extract the reply from the connection and send it
                                     let response = client.take_reply();
                                     let mut encoder = RespEncoder::new(client.resp_version());
@@ -87,12 +88,7 @@ pub async fn process_connection(
     }
 }
 
-async fn handle_command(
-    client: Arc<Client>,
-    storage: Arc<Storage>,
-    cmd_table: Arc<CmdTable>,
-    executor: Arc<CmdExecutor>,
-) {
+async fn handle_command(client: Arc<Client>, storage: Arc<Storage>, cmd_table: Arc<CmdTable>) {
     // Convert the command name from &[u8] to a lowercase String for lookup
     let cmd_name = String::from_utf8_lossy(&client.cmd_name()).to_lowercase();
 
@@ -107,12 +103,7 @@ async fn handle_command(
     }
 
     if let Some(cmd) = cmd_table.get(&cmd_name) {
-        let exec = CmdExecution {
-            cmd: cmd.clone(),
-            client: client.clone(),
-            storage,
-        };
-        executor.execute(exec).await;
+        execute_direct_typed_command(&client, storage, cmd.as_ref());
     } else {
         // Command not found, set an error reply
         client.set_error(error_catalog::unknown_command_name(&cmd_name));

@@ -29,6 +29,7 @@ use storage::storage::Storage;
 use tokio::select;
 
 use crate::buffer::{BufferManager, BufferedReader};
+use crate::executor_ext::execute_direct_typed_command;
 use crate::pipeline::{CommandPipeline, PipelineConfig};
 use crate::pool::{ConnectionPool, PoolConfig};
 
@@ -320,17 +321,12 @@ impl OptimizedConnectionHandler {
         client: Arc<Client>,
         storage: Arc<Storage>,
         cmd_table: Arc<CmdTable>,
-        executor: Arc<CmdExecutor>,
+        _executor: Arc<CmdExecutor>,
     ) {
         let cmd_name = String::from_utf8_lossy(&client.cmd_name()).to_lowercase();
 
         if let Some(cmd) = cmd_table.get(&cmd_name) {
-            let exec = executor::CmdExecution {
-                cmd: cmd.clone(),
-                client: client.clone(),
-                storage,
-            };
-            executor.execute(exec).await;
+            execute_direct_typed_command(&client, storage, cmd.as_ref());
         } else {
             client.set_error(error_catalog::unknown_command_name(&cmd_name));
         }
