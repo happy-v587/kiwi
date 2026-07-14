@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 use client::Client;
 use resp::RespData;
@@ -81,5 +81,30 @@ impl Cmd for ZremrangebyscoreCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            4 => match (
+                String::from_utf8_lossy(&argv[2]).parse::<f64>(),
+                String::from_utf8_lossy(&argv[3]).parse::<f64>(),
+            ) {
+                (Ok(min_score), Ok(max_score)) => storage
+                    .zremrangebyscore(&argv[1], min_score, max_score)
+                    .map(|count| RespData::Integer(count.into()))
+                    .map_err(crate::error::CommandError::storage),
+                _ => Err(crate::error::CommandError::InvalidArgument(
+                    crate::error::ArgumentError::InvalidScoreRange,
+                )),
+            },
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }

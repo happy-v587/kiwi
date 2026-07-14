@@ -17,8 +17,10 @@
 
 use std::sync::Arc;
 
+use crate::CommandResult;
 use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
+use bytes::Bytes;
 use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
@@ -105,5 +107,57 @@ impl Cmd for ZrangebylexCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 4 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let mut offset = None;
+            let mut count = None;
+            let mut index = 4;
+            while index < argv.len() {
+                if !argv[index].eq_ignore_ascii_case(b"LIMIT") || index + 2 >= argv.len() {
+                    return Some(Err(crate::error::CommandError::InvalidArgument(
+                        crate::error::ArgumentError::Syntax,
+                    )));
+                }
+                offset = match String::from_utf8_lossy(&argv[index + 1]).parse::<i64>() {
+                    Ok(value) => Some(value),
+                    Err(_) => {
+                        return Some(Err(crate::error::CommandError::InvalidArgument(
+                            crate::error::ArgumentError::NotInteger,
+                        )));
+                    }
+                };
+                count = match String::from_utf8_lossy(&argv[index + 2]).parse::<i64>() {
+                    Ok(value) => Some(value),
+                    Err(_) => {
+                        return Some(Err(crate::error::CommandError::InvalidArgument(
+                            crate::error::ArgumentError::NotInteger,
+                        )));
+                    }
+                };
+                index += 3;
+            }
+            storage
+                .zrangebylex(&argv[1], &argv[2], &argv[3], offset, count)
+                .map(|members| {
+                    RespData::Array(Some(
+                        members
+                            .into_iter()
+                            .map(|member| RespData::BulkString(Some(Bytes::from(member))))
+                            .collect(),
+                    ))
+                })
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }

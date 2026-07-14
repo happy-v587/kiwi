@@ -776,6 +776,51 @@ async fn storage_command_e2e_zscan_uses_typed_arguments_and_reply() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_sorted_set_lex_and_range_removals_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["ZADD", "lex", "1", "alpha", "1", "beta", "1", "gamma"],
+        )
+        .await,
+        RespData::Integer(3)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["ZLEXCOUNT", "lex", "[a", "[z"]).await,
+        RespData::Integer(3)
+    );
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["ZRANGEBYLEX", "lex", "-", "+", "LIMIT", "1", "1"]
+        )
+        .await,
+        RespData::Array(Some(vec![RespData::BulkString(Some(Bytes::from_static(
+            b"beta",
+        )))]))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["ZREMRANGEBYLEX", "lex", "[beta", "[beta"]).await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["ZREMRANGEBYRANK", "lex", "0", "0"]).await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["ZREMRANGEBYSCORE", "lex", "1", "1"]).await,
+        RespData::Integer(1)
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)
