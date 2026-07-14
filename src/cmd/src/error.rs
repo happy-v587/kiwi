@@ -108,6 +108,8 @@ pub enum ArgumentError {
     InvalidScoreRange,
     ZStoreNumKeys,
     ZStoreWeightNotFloat,
+    BitOffsetNotInteger,
+    BitNotInteger,
     OutOfRange,
     OffsetOutOfRange,
     InvalidExpireTime,

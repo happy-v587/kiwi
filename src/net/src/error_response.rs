@@ -78,6 +78,12 @@ impl RedisErrorRenderer {
             CommandError::InvalidArgument(ArgumentError::ZStoreWeightNotFloat) => {
                 error_catalog::ZSTORE_WEIGHT_NOT_FLOAT.to_string()
             }
+            CommandError::InvalidArgument(ArgumentError::BitOffsetNotInteger) => {
+                error_catalog::BIT_OFFSET_NOT_INTEGER.to_string()
+            }
+            CommandError::InvalidArgument(ArgumentError::BitNotInteger) => {
+                error_catalog::BIT_IS_NOT_INTEGER.to_string()
+            }
             CommandError::InvalidArgument(ArgumentError::OutOfRange) => {
                 error_catalog::VALUE_OUT_OF_RANGE_MUST_BE_POSITIVE.to_string()
             }
