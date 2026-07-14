@@ -15,7 +15,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
+use crate::{
+    AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult, impl_cmd_clone_box,
+    impl_cmd_meta,
+};
 use client::Client;
 use resp::RespData;
 use std::sync::Arc;
@@ -105,6 +108,36 @@ impl Cmd for ZaddCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 4 || !argv.len().is_multiple_of(2) {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let mut score_members = Vec::new();
+            for score_member in argv[2..].chunks_exact(2) {
+                let score = match String::from_utf8_lossy(&score_member[0]).parse::<f64>() {
+                    Ok(score) if score.is_finite() => score,
+                    _ => {
+                        return Some(Err(crate::error::CommandError::InvalidArgument(
+                            crate::error::ArgumentError::NotFloat,
+                        )));
+                    }
+                };
+                score_members.push(ZsetScoreMember::new(score, score_member[1].clone()));
+            }
+            storage
+                .zadd(&argv[1], &score_members)
+                .map(|count| RespData::Integer(count.into()))
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 

@@ -588,6 +588,45 @@ async fn storage_command_e2e_set_random_move_and_scan_commands_use_typed_replies
 }
 
 #[tokio::test]
+async fn storage_command_e2e_basic_sorted_set_commands_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["ZADD", "scores", "1", "first", "2", "second"],
+        )
+        .await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["ZCARD", "scores"]).await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["ZSCORE", "scores", "first"]).await,
+        RespData::BulkString(Some(Bytes::from_static(b"1")))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["ZRANK", "scores", "first"]).await,
+        RespData::Integer(0)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["ZREVRANK", "scores", "first"]).await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["ZREM", "scores", "first", "missing"]).await,
+        RespData::Integer(1)
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)
