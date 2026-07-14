@@ -361,6 +361,52 @@ async fn storage_command_e2e_hash_multi_field_commands_use_typed_replies() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_hash_increment_commands_preserve_numeric_errors() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["HINCRBY", "hash", "integer", "2"]).await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HINCRBYFLOAT", "hash", "float", "1.5"]).await,
+        RespData::BulkString(Some(Bytes::from_static(b"1.5")))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HSET", "hash", "not-integer", "text"]).await,
+        RespData::Integer(1)
+    );
+    let reply = send_command(&mut stream, &["HINCRBY", "hash", "not-integer", "1"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::HASH_VALUE_NOT_INTEGER
+    );
+    let reply = send_command(&mut stream, &["HINCRBYFLOAT", "hash", "float", "NaN"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::INCR_NAN_OR_INFINITY
+    );
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["HSET", "hash", "maximum", "9223372036854775807"],
+        )
+        .await,
+        RespData::Integer(1)
+    );
+    let reply = send_command(&mut stream, &["HINCRBY", "hash", "maximum", "1"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::INCREMENT_DECREMENT_WOULD_OVERFLOW
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)

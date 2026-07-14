@@ -22,7 +22,10 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
+use crate::{
+    AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult, impl_cmd_clone_box,
+    impl_cmd_meta,
+};
 
 #[derive(Clone, Default)]
 pub struct HIncrByFloatCmd {
@@ -75,5 +78,30 @@ impl Cmd for HIncrByFloatCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            4 => match String::from_utf8_lossy(&argv[3]).parse::<f64>() {
+                Ok(increment) if increment.is_finite() => storage
+                    .hincrbyfloat(&argv[1], &argv[2], increment)
+                    .map(|value| RespData::BulkString(Some(Bytes::from(value.to_string()))))
+                    .map_err(crate::error::CommandError::storage),
+                Ok(_) => Err(crate::error::CommandError::Numeric(
+                    crate::error::NumericError::NaNOrInfinity,
+                )),
+                Err(_) => Err(crate::error::CommandError::InvalidArgument(
+                    crate::error::ArgumentError::NotFloat,
+                )),
+            },
+            _ => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }

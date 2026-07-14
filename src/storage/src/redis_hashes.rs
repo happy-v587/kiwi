@@ -900,10 +900,13 @@ impl Redis {
                                 .build()
                             })?;
 
-                            let new_val =
-                                old_int.checked_add(increment).context(OptionNoneSnafu {
-                                    message: "integer overflow",
-                                })?;
+                            let new_val = old_int.checked_add(increment).ok_or_else(|| {
+                                RedisErrSnafu {
+                                    message: error_catalog::INCREMENT_DECREMENT_WOULD_OVERFLOW
+                                        .to_string(),
+                                }
+                                .build()
+                            })?;
 
                             let new_val_str = new_val.to_string();
                             let data_value = BaseDataValue::new(new_val_str.into_bytes());

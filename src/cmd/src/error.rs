@@ -70,6 +70,12 @@ impl CommandError {
                 error_catalog::VALUE_NOT_VALID_FLOAT => {
                     Self::InvalidArgument(ArgumentError::NotFloat)
                 }
+                error_catalog::HASH_VALUE_NOT_INTEGER => {
+                    Self::InvalidArgument(ArgumentError::HashValueNotInteger)
+                }
+                error_catalog::HASH_VALUE_NOT_VALID_FLOAT => {
+                    Self::InvalidArgument(ArgumentError::HashValueNotFloat)
+                }
                 error_catalog::INCREMENT_DECREMENT_WOULD_OVERFLOW => {
                     Self::Numeric(NumericError::Overflow)
                 }
@@ -88,6 +94,8 @@ pub enum ArgumentError {
     Syntax,
     NotInteger,
     NotFloat,
+    HashValueNotInteger,
+    HashValueNotFloat,
     OutOfRange,
     OffsetOutOfRange,
     InvalidExpireTime,

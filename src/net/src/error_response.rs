@@ -62,6 +62,12 @@ impl RedisErrorRenderer {
             CommandError::InvalidArgument(ArgumentError::NotFloat) => {
                 error_catalog::VALUE_NOT_VALID_FLOAT.to_string()
             }
+            CommandError::InvalidArgument(ArgumentError::HashValueNotInteger) => {
+                error_catalog::HASH_VALUE_NOT_INTEGER.to_string()
+            }
+            CommandError::InvalidArgument(ArgumentError::HashValueNotFloat) => {
+                error_catalog::HASH_VALUE_NOT_VALID_FLOAT.to_string()
+            }
             CommandError::InvalidArgument(ArgumentError::OutOfRange) => {
                 error_catalog::VALUE_OUT_OF_RANGE_MUST_BE_POSITIVE.to_string()
             }
