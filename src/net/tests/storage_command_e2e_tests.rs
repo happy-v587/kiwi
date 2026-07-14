@@ -260,6 +260,26 @@ async fn storage_command_e2e_wrong_number_of_arguments_returns_resp_error() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_mset_unpaired_key_returns_wrong_arity() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    let reply = send_command(&mut stream, &["MSET", "key-1", "value-1", "key-2"]).await;
+    assert!(
+        matches!(reply, RespData::Error(_)),
+        "expected error, got {reply:?}"
+    );
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::wrong_number("mset")
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_auth_requirepass_flow() {
     let server = TestServer::start(Some("secret".to_string())).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)

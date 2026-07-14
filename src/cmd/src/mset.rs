@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -92,5 +92,69 @@ impl Cmd for MsetCmd {
             Ok(_) => client.set_reply(RespData::SimpleString("OK".to_string().into())),
             Err(e) => client.set_storage_error(&e),
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 3 || argv.len().is_multiple_of(2) {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let kvs: Vec<(Vec<u8>, Vec<u8>)> = argv[1..]
+                .chunks_exact(2)
+                .map(|chunk| (chunk[0].clone(), chunk[1].clone()))
+                .collect();
+
+            match storage.mset(&kvs) {
+                Ok(()) => Ok(RespData::SimpleString("OK".into())),
+                Err(error) => Err(crate::error::CommandError::storage(error)),
+            }
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
+}
+
+#[allow(clippy::unwrap_used)]
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use client::StreamTrait;
+
+    struct TestStream;
+
+    #[async_trait::async_trait]
+    impl StreamTrait for TestStream {
+        async fn read(&mut self, _buf: &mut [u8]) -> Result<usize, std::io::Error> {
+            Ok(0)
+        }
+
+        async fn write(&mut self, _data: &[u8]) -> Result<usize, std::io::Error> {
+            Ok(0)
+        }
+    }
+
+    #[test]
+    fn typed_mset_rejects_unpaired_key_without_mutating_the_client_reply() {
+        let client = Client::new(Box::new(TestStream));
+        client.set_argv(&[
+            b"mset".to_vec(),
+            b"key-1".to_vec(),
+            b"value-1".to_vec(),
+            b"key-2".to_vec(),
+        ]);
+
+        let result = MsetCmd::new()
+            .execute_typed(&client, Arc::new(Storage::new(1, 0)))
+            .expect("MSET supports typed execution");
+
+        assert!(matches!(
+            result,
+            Err(crate::error::CommandError::WrongArity { command }) if command == "mset"
+        ));
+        assert_eq!(client.take_reply(), RespData::default());
     }
 }
