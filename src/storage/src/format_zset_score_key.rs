@@ -17,8 +17,7 @@
 
 use std::mem::size_of;
 
-use crate::error::InvalidFormatSnafu;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::storage_define::{PREFIX_RESERVE_LENGTH, SUFFIX_RESERVE_LENGTH};
 use crate::storage_define::{decode_user_key, encode_user_key, seek_userkey_delim};
 use bytes::{BufMut, Bytes, BytesMut};
@@ -117,10 +116,10 @@ impl ParsedZSetsScoreKey {
     pub fn new(encoded_key: &[u8]) -> Result<Self> {
         let min_len = PREFIX_RESERVE_LENGTH + SUFFIX_RESERVE_LENGTH;
         if encoded_key.len() < min_len {
-            return Err(InvalidFormatSnafu {
-                message: "encoded key too short".to_string(),
-            }
-            .build());
+            return Err(Error::corruption(
+                "decode zset score key",
+                "encoded key too short",
+            ));
         }
 
         let mut key_str = BytesMut::new();
@@ -136,23 +135,28 @@ impl ParsedZSetsScoreKey {
         // key
         let delim_len = 2;
         if encoded_key.len() < start_idx + delim_len + size_of::<u64>() * 2 {
-            return Err(InvalidFormatSnafu {
-                message: "encoded key too short for key, version and score".to_string(),
-            }
-            .build());
+            return Err(Error::corruption(
+                "decode zset score key",
+                "encoded key too short for key, version and score",
+            ));
         }
 
         let key_end_idx = start_idx + seek_userkey_delim(&encoded_key[start_idx..]);
         let encoded_key_part = &encoded_key[start_idx..key_end_idx];
-        decode_user_key(encoded_key_part, &mut key_str)?;
+        decode_user_key(encoded_key_part, &mut key_str).map_err(|err| {
+            Error::corruption(
+                "decode zset score key",
+                format!("invalid encoded user key: {err}"),
+            )
+        })?;
 
         // version (little-endian)
         let version_end_idx = key_end_idx + size_of::<u64>();
         if version_end_idx > end_idx {
-            return Err(InvalidFormatSnafu {
-                message: "encoded key too short for version".to_string(),
-            }
-            .build());
+            return Err(Error::corruption(
+                "decode zset score key",
+                "encoded key too short for version",
+            ));
         }
         let version_slice = &encoded_key[key_end_idx..version_end_idx];
         let mut version_bytes = [0u8; size_of::<u64>()];
@@ -162,20 +166,20 @@ impl ParsedZSetsScoreKey {
         // score (little-endian, decode from raw IEEE 754 bits)
         let score_end_idx = version_end_idx + size_of::<u64>();
         if score_end_idx > end_idx {
-            return Err(InvalidFormatSnafu {
-                message: "encoded key too short for score".to_string(),
-            }
-            .build());
+            return Err(Error::corruption(
+                "decode zset score key",
+                "encoded key too short for score",
+            ));
         }
         let score_slice = &encoded_key[version_end_idx..score_end_idx];
         let score_bits = u64::from_le_bytes(score_slice.try_into().expect("slice length mismatch"));
         let score = f64::from_bits(score_bits);
 
         if encoded_key.len() < score_end_idx + SUFFIX_RESERVE_LENGTH {
-            return Err(InvalidFormatSnafu {
-                message: "encoded key too short for member and reserve2".to_string(),
-            }
-            .build());
+            return Err(Error::corruption(
+                "decode zset score key",
+                "encoded key too short for member and reserve2",
+            ));
         }
 
         // member
@@ -217,6 +221,23 @@ impl ParsedZSetsScoreKey {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::{Error, StorageError};
+
+    #[test]
+    fn test_parse_error_too_short_is_storage_corruption() {
+        let parsed = ParsedZSetsScoreKey::new(&[]);
+
+        assert!(matches!(
+            parsed,
+            Err(Error::Typed {
+                error: StorageError::Corruption {
+                    operation: "decode zset score key",
+                    ..
+                },
+                ..
+            })
+        ));
+    }
 
     #[test]
     fn test_encode_decode_roundtrip_basic() {
