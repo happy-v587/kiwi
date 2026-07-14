@@ -21,7 +21,7 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -76,5 +76,24 @@ impl Cmd for DelCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 2 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let keys: Vec<Vec<u8>> = argv[1..].to_vec();
+            match storage.del(&keys) {
+                Ok(count) => Ok(RespData::Integer(count)),
+                Err(error) => Err(crate::error::CommandError::storage(error)),
+            }
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
