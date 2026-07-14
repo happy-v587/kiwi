@@ -19,11 +19,10 @@ use std::io::Cursor;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use chrono::Utc;
-use snafu::ensure;
 
 use crate::{
     delegate_internal_value, delegate_parsed_value,
-    error::{InvalidFormatSnafu, Result},
+    error::{Error, Result},
     format_base_value::{DataType, InternalValue, ParsedInternalValue},
     storage_define::{
         BASE_META_VALUE_COUNT_LENGTH, SUFFIX_RESERVE_LENGTH, TIMESTAMP_LENGTH, TYPE_LENGTH,
@@ -133,19 +132,22 @@ impl ParsedListsMetaValue {
     {
         let value: BytesMut = internal_value.into();
         let value_len = value.len();
-        ensure!(
-            value_len >= Self::LISTS_META_VALUE_LENGTH,
-            InvalidFormatSnafu {
-                message: format!(
+        if value_len < Self::LISTS_META_VALUE_LENGTH {
+            return Err(Error::corruption(
+                "decode list metadata",
+                format!(
                     "invalid lists meta value length: {} < {}",
                     value.len(),
                     Self::LISTS_META_VALUE_LENGTH,
-                )
-            }
-        );
+                ),
+            ));
+        }
 
         let mut val_reader = Cursor::new(&value[..]);
-        let data_type: DataType = val_reader.get_u8().try_into()?;
+        let data_type: DataType = val_reader
+            .get_u8()
+            .try_into()
+            .map_err(|_| Error::corruption("decode list metadata", "invalid data type tag"))?;
         let pos = val_reader.position() as usize;
 
         let count_range = pos..pos + BASE_META_VALUE_COUNT_LENGTH;
@@ -324,6 +326,7 @@ impl ParsedListsMetaValue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::{Error, StorageError};
 
     const TEST_COUNT: u64 = 10;
     const TEST_VERSION: u64 = 123456789;
@@ -419,6 +422,22 @@ mod tests {
         assert_eq!(parsed.right_index, TEST_RIGHT_INDEX);
         assert_eq!(parsed.inner.ctime, TEST_CTIME);
         assert_eq!(parsed.inner.etime, TEST_ETIME);
+    }
+
+    #[test]
+    fn test_parsed_lists_meta_value_rejects_short_persisted_data_as_corruption() {
+        let meta = ParsedListsMetaValue::new(BytesMut::from(&[DataType::List as u8][..]));
+
+        assert!(matches!(
+            meta,
+            Err(Error::Typed {
+                error: StorageError::Corruption {
+                    operation: "decode list metadata",
+                    ..
+                },
+                ..
+            })
+        ));
     }
 
     #[test]
