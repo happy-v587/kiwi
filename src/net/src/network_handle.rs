@@ -35,9 +35,10 @@ use resp::encode::RespEncoder;
 use resp::{Parse, RespData, RespEncode, RespParseResult};
 use tokio::select;
 
+use crate::error_response::RedisErrorRenderer;
 use crate::executor_ext::CmdExecutorNetworkExt;
 use crate::storage_client::StorageClient;
-use runtime::DualRuntimeError;
+use runtime::ExecutionError;
 
 /// Process a network connection using StorageClient for storage operations
 ///
@@ -177,9 +178,9 @@ async fn handle_network_command(
             Err(e) => {
                 error!("Command execution failed for {}: {}", cmd_name, e);
 
-                // Use enhanced error response generation
-                let error_response = generate_storage_error_response(&e, &cmd_name);
-                client.set_reply(error_response);
+                client.set_reply(RedisErrorRenderer::render_execution(&ExecutionError::from(
+                    &e,
+                )));
             }
         }
     } else {
@@ -395,19 +396,6 @@ async fn process_command_batch(
             }
         }
     }
-}
-
-/// Maps cross-runtime failures to a sanitized client-visible RESP error.
-///
-/// Internal details are logged by the caller; this function never leaks
-/// component names, timeouts, or internal reasons to clients.
-fn generate_storage_error_response(error: &DualRuntimeError, _command: &str) -> RespData {
-    let error_message = match error {
-        DualRuntimeError::Timeout { .. } => error_catalog::COMMAND_TIMEOUT,
-        _ => error_catalog::INTERNAL_SERVER_ERROR,
-    };
-
-    RespData::error(error_message)
 }
 
 #[allow(clippy::unwrap_used)]
