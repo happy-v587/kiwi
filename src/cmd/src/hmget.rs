@@ -22,7 +22,10 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
+use crate::{
+    AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult, impl_cmd_clone_box,
+    impl_cmd_meta,
+};
 
 #[derive(Clone, Default)]
 pub struct HMGetCmd {
@@ -71,5 +74,31 @@ impl Cmd for HMGetCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 3 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let fields = argv[2..].to_vec();
+            storage
+                .hmget(&argv[1], &fields)
+                .map(|values| {
+                    RespData::Array(Some(
+                        values
+                            .into_iter()
+                            .map(|value| RespData::BulkString(value.map(Bytes::from)))
+                            .collect(),
+                    ))
+                })
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }

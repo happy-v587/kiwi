@@ -318,6 +318,49 @@ async fn storage_command_e2e_hash_collection_commands_use_typed_replies() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_hash_multi_field_commands_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["HMSET", "hash", "first", "one", "second", "two"],
+        )
+        .await,
+        RespData::SimpleString(Bytes::from_static(b"OK"))
+    );
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["HMGET", "hash", "second", "missing", "first"]
+        )
+        .await,
+        RespData::Array(Some(vec![
+            RespData::BulkString(Some(Bytes::from_static(b"two"))),
+            RespData::BulkString(None),
+            RespData::BulkString(Some(Bytes::from_static(b"one"))),
+        ]))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HSETNX", "hash", "first", "ignored"]).await,
+        RespData::Integer(0)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HSETNX", "hash", "new", "value"]).await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HSTRLEN", "hash", "new"]).await,
+        RespData::Integer(5)
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)

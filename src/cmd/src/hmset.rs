@@ -17,11 +17,15 @@
 
 use std::sync::Arc;
 
+use bytes::Bytes;
 use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
+use crate::{
+    AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult, impl_cmd_clone_box,
+    impl_cmd_meta,
+};
 
 #[derive(Clone, Default)]
 pub struct HMSetCmd {
@@ -72,5 +76,27 @@ impl Cmd for HMSetCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 4 || !(argv.len() - 2).is_multiple_of(2) {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let field_values = argv[2..]
+                .chunks_exact(2)
+                .map(|field_value| (field_value[0].clone(), field_value[1].clone()))
+                .collect::<Vec<_>>();
+            storage
+                .hmset(&argv[1], &field_values)
+                .map(|()| RespData::SimpleString(Bytes::from_static(b"OK")))
+                .map_err(crate::error::CommandError::storage)
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
