@@ -16,7 +16,7 @@
 // limitations under the License.
 
 use cmd::error::{ArgumentError, AuthenticationError, CommandError};
-use resp::RespData;
+use resp::{HelloError, RespData};
 
 /// Converts typed request failures to Redis-compatible RESP error replies.
 ///
@@ -57,6 +57,16 @@ impl RedisErrorRenderer {
             CommandError::Authentication(AuthenticationError::PasswordNotConfigured) => {
                 error_catalog::AUTH_NO_PASSWORD_CONFIGURED.to_string()
             }
+            CommandError::Hello(HelloError::InvalidArgument(message)) => {
+                error_catalog::ensure_err_prefix(message)
+            }
+            CommandError::Hello(HelloError::WrongPassword) => error_catalog::WRONGPASS.to_string(),
+            CommandError::Hello(HelloError::NoPasswordConfigured) => {
+                error_catalog::HELLO_AUTH_NO_PASSWORD_CONFIGURED.to_string()
+            }
+            CommandError::Hello(HelloError::AuthenticationRequired) => {
+                error_catalog::HELLO_AUTH_REQUIRED.to_string()
+            }
             CommandError::Internal => error_catalog::INTERNAL_SERVER_ERROR.to_string(),
         }
     }
@@ -65,7 +75,7 @@ impl RedisErrorRenderer {
 #[cfg(test)]
 mod tests {
     use cmd::error::{ArgumentError, AuthenticationError, CommandError};
-    use resp::{RespEncode, RespVersion, encode::RespEncoder};
+    use resp::{HelloError, RespEncode, RespVersion, encode::RespEncoder};
 
     use super::RedisErrorRenderer;
 
@@ -98,6 +108,22 @@ mod tests {
         assert_eq!(
             render(CommandError::Internal),
             b"-ERR internal server error\r\n".as_slice()
+        );
+    }
+
+    #[test]
+    fn renders_hello_command_errors_as_compatible_resp_bytes() {
+        assert_eq!(
+            render(CommandError::Hello(HelloError::WrongPassword)),
+            b"-WRONGPASS invalid username-password pair or user is disabled.\r\n".as_slice()
+        );
+        assert_eq!(
+            render(CommandError::Hello(HelloError::NoPasswordConfigured)),
+            b"-ERR HELLO AUTH called without any password configured\r\n".as_slice()
+        );
+        assert_eq!(
+            render(CommandError::Hello(HelloError::AuthenticationRequired)),
+            b"-NOAUTH HELLO must be called with the client already authenticated, otherwise the HELLO <proto> AUTH <user> <pass> option can be used to authenticate the client and select the RESP protocol version at the same time\r\n".as_slice()
         );
     }
 }

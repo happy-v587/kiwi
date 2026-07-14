@@ -15,6 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use resp::HelloError;
 use thiserror::Error;
 
 /// Errors whose meaning is defined by Redis command semantics.
@@ -34,6 +35,9 @@ pub enum CommandError {
 
     #[error("authentication failed")]
     Authentication(AuthenticationError),
+
+    #[error(transparent)]
+    Hello(#[from] HelloError),
 
     #[error("internal command failure")]
     Internal,

@@ -23,6 +23,7 @@ use resp::{CommandType, HelloAuthResult, HelloError, RespCommand};
 use storage::storage::Storage;
 use subtle::ConstantTimeEq;
 
+use crate::error::CommandError;
 use crate::{
     AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, RequirepassProvider, impl_cmd_clone_box,
     impl_cmd_meta,
@@ -115,21 +116,36 @@ impl Cmd for HelloCmd {
                 client.set_authenticated(true);
                 client.set_reply(response);
             }
-            Err(err) => client.set_error(format_hello_error(err)),
+            Err(err) => {
+                let err = command_error_from_hello(err);
+                client.set_error(legacy_hello_error_message(&err));
+            }
         }
     }
 }
 
-/// Temporarily preserve HELLO's existing Redis-compatible replies while the
-/// command error model is introduced in the following migration step.
-fn format_hello_error(err: HelloError) -> String {
+/// Convert RESP negotiation semantics to the command error boundary.
+fn command_error_from_hello(err: HelloError) -> CommandError {
+    err.into()
+}
+
+/// Compatibility bridge for the current mutation-based `Cmd` interface.
+///
+/// Task 5 removes this bridge when commands return `Result<Reply,
+/// CommandError>` and the network layer becomes the only rendering boundary.
+fn legacy_hello_error_message(err: &CommandError) -> String {
     match err {
-        HelloError::InvalidArgument(message) => error_catalog::ensure_err_prefix(message),
-        HelloError::WrongPassword => error_catalog::WRONGPASS.to_string(),
-        HelloError::NoPasswordConfigured => {
+        CommandError::Hello(HelloError::InvalidArgument(message)) => {
+            error_catalog::ensure_err_prefix(message)
+        }
+        CommandError::Hello(HelloError::WrongPassword) => error_catalog::WRONGPASS.to_string(),
+        CommandError::Hello(HelloError::NoPasswordConfigured) => {
             error_catalog::HELLO_AUTH_NO_PASSWORD_CONFIGURED.to_string()
         }
-        HelloError::AuthenticationRequired => error_catalog::HELLO_AUTH_REQUIRED.to_string(),
+        CommandError::Hello(HelloError::AuthenticationRequired) => {
+            error_catalog::HELLO_AUTH_REQUIRED.to_string()
+        }
+        _ => error_catalog::INTERNAL_SERVER_ERROR.to_string(),
     }
 }
 
@@ -211,6 +227,22 @@ mod tests {
         assert!(!client.is_authenticated());
         let err = reply_is_error(&client).expect("expected an error reply");
         assert!(err.starts_with("WRONGPASS"), "unexpected reply: {err}");
+    }
+
+    #[test]
+    fn hello_errors_are_mapped_to_typed_command_errors() {
+        assert_eq!(
+            command_error_from_hello(HelloError::WrongPassword),
+            crate::error::CommandError::Hello(HelloError::WrongPassword)
+        );
+        assert_eq!(
+            command_error_from_hello(HelloError::NoPasswordConfigured),
+            crate::error::CommandError::Hello(HelloError::NoPasswordConfigured)
+        );
+        assert_eq!(
+            command_error_from_hello(HelloError::AuthenticationRequired),
+            crate::error::CommandError::Hello(HelloError::AuthenticationRequired)
+        );
     }
 
     #[test]

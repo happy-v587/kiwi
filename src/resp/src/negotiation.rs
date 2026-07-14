@@ -40,7 +40,7 @@ pub enum HelloAuthResult {
 ///
 /// These are command errors, not RESP wire parsing errors. The command layer
 /// maps them to Redis-compatible client replies.
-#[derive(Debug, Error, PartialEq, Eq)]
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum HelloError {
     #[error("invalid HELLO argument: {0}")]
     InvalidArgument(String),
