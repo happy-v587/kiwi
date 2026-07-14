@@ -140,6 +140,15 @@ mod tests {
             render(CommandError::Internal),
             b"-ERR internal server error\r\n".as_slice()
         );
+        assert_eq!(
+            render(CommandError::storage(
+                storage::error::Error::InvalidFormat {
+                    message: "persisted detail must not reach clients".to_string(),
+                    location: snafu::Location::new(file!(), line!(), column!()),
+                },
+            )),
+            b"-ERR internal server error\r\n".as_slice()
+        );
     }
 
     #[test]
