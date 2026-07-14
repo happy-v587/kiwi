@@ -25,8 +25,8 @@ use subtle::ConstantTimeEq;
 
 use crate::error::CommandError;
 use crate::{
-    AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, RequirepassProvider, impl_cmd_clone_box,
-    impl_cmd_meta,
+    AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult, RequirepassProvider,
+    impl_cmd_clone_box, impl_cmd_meta,
 };
 
 #[derive(Clone)]
@@ -63,17 +63,8 @@ impl HelloCmd {
             requirepass_provider: provider,
         }
     }
-}
 
-impl Cmd for HelloCmd {
-    impl_cmd_meta!();
-    impl_cmd_clone_box!();
-
-    fn do_initial(&self, _client: &Client) -> bool {
-        true
-    }
-
-    fn do_cmd(&self, client: &Client, _storage: Arc<Storage>) {
+    fn execute_hello(&self, client: &Client) -> CommandResult {
         let argv = client.argv();
         let command = RespCommand {
             command_type: CommandType::Hello,
@@ -114,13 +105,30 @@ impl Cmd for HelloCmd {
                 // authenticated or the HELLO included an AUTH clause that
                 // succeeded. In both cases the connection is authenticated.
                 client.set_authenticated(true);
-                client.set_reply(response);
+                Ok(response)
             }
-            Err(err) => {
-                let err = command_error_from_hello(err);
-                client.set_error(legacy_hello_error_message(&err));
-            }
+            Err(err) => Err(command_error_from_hello(err)),
         }
+    }
+}
+
+impl Cmd for HelloCmd {
+    impl_cmd_meta!();
+    impl_cmd_clone_box!();
+
+    fn do_initial(&self, _client: &Client) -> bool {
+        true
+    }
+
+    fn do_cmd(&self, client: &Client, _storage: Arc<Storage>) {
+        match self.execute_hello(client) {
+            Ok(response) => client.set_reply(response),
+            Err(err) => client.set_error(legacy_hello_error_message(&err)),
+        }
+    }
+
+    fn execute_typed(&self, client: &Client, _storage: Arc<Storage>) -> Option<CommandResult> {
+        Some(self.execute_hello(client))
     }
 }
 
@@ -227,6 +235,30 @@ mod tests {
         assert!(!client.is_authenticated());
         let err = reply_is_error(&client).expect("expected an error reply");
         assert!(err.starts_with("WRONGPASS"), "unexpected reply: {err}");
+    }
+
+    #[test]
+    fn typed_hello_returns_negotiation_error_without_writing_a_reply() {
+        let cmd = hello_cmd_with(Some("secret"));
+        let client = make_client();
+        client.set_argv(&[
+            b"hello".to_vec(),
+            b"3".to_vec(),
+            b"AUTH".to_vec(),
+            b"other".to_vec(),
+            b"secret".to_vec(),
+        ]);
+
+        let result = cmd
+            .execute_typed(&client, make_storage())
+            .expect("HELLO supports typed execution");
+
+        assert_eq!(
+            result,
+            Err(crate::error::CommandError::Hello(HelloError::WrongPassword))
+        );
+        assert!(!client.is_authenticated());
+        assert_eq!(client.take_reply(), RespData::default());
     }
 
     #[test]
