@@ -393,6 +393,12 @@ impl Cmd for BaseCmdGroup {
         }
     }
 
+    fn uses_typed_execution(&self) -> bool {
+        self.sub_cmds
+            .values()
+            .all(|sub_cmd| sub_cmd.uses_typed_execution())
+    }
+
     fn has_sub_command(&self) -> bool {
         true
     }

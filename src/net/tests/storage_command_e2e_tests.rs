@@ -1380,3 +1380,41 @@ async fn storage_command_e2e_ttl_and_keyspace_commands_use_typed_replies() {
 
     server.shutdown().await;
 }
+
+#[tokio::test]
+async fn storage_command_e2e_admin_commands_use_typed_replies_and_errors() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    let reply = send_command(&mut stream, &["INFO", "cluster"]).await;
+    assert_eq!(
+        reply,
+        RespData::BulkString(Some(Bytes::from_static(
+            b"# Cluster\r\ncluster_enabled:0\r\ncluster_state:disabled\r\n"
+        )))
+    );
+
+    assert_eq!(
+        send_command(&mut stream, &["CONFIG", "GET", "cluster-enabled"]).await,
+        RespData::Array(Some(vec![
+            RespData::BulkString(Some(Bytes::from_static(b"cluster-enabled"))),
+            RespData::BulkString(Some(Bytes::from_static(b"no"))),
+        ]))
+    );
+
+    let reply = send_command(&mut stream, &["CONFIG", "SET", "port", "7380"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::CONFIG_RUNTIME_CHANGES_NOT_SUPPORTED
+    );
+
+    let reply = send_command(&mut stream, &["CONFIG", "unknown"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::unknown_config_subcommand("unknown")
+    );
+
+    server.shutdown().await;
+}

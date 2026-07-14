@@ -82,6 +82,10 @@ impl Cmd for CmdClientGetname {
             }),
         })
     }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Clone, Default)]
@@ -133,6 +137,10 @@ impl Cmd for CmdClientSetname {
                 command: self.name().to_string(),
             }),
         })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 

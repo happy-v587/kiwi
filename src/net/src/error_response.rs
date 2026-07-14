@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use cmd::error::{ArgumentError, AuthenticationError, CommandError, NumericError};
+use cmd::error::{ArgumentError, AuthenticationError, CommandError, ConfigError, NumericError};
 use resp::{HelloError, RespData};
 use runtime::ExecutionError;
 
@@ -125,6 +125,12 @@ impl RedisErrorRenderer {
             }
             CommandError::Authentication(AuthenticationError::AclNotSupported) => {
                 error_catalog::AUTH_ACL_NOT_SUPPORTED.to_string()
+            }
+            CommandError::Config(ConfigError::RuntimeChangesNotSupported) => {
+                error_catalog::CONFIG_RUNTIME_CHANGES_NOT_SUPPORTED.to_string()
+            }
+            CommandError::Config(ConfigError::UnknownSubcommand { subcommand }) => {
+                error_catalog::unknown_config_subcommand(subcommand)
             }
             CommandError::Hello(HelloError::InvalidArgument(message)) => {
                 error_catalog::ensure_err_prefix(message)

@@ -45,6 +45,9 @@ pub enum CommandError {
     #[error("authentication failed")]
     Authentication(AuthenticationError),
 
+    #[error("configuration command failed")]
+    Config(ConfigError),
+
     #[error(transparent)]
     Hello(#[from] HelloError),
 
@@ -139,6 +142,13 @@ pub enum AuthenticationError {
     WrongPassword,
     PasswordNotConfigured,
     AclNotSupported,
+}
+
+/// Failures specific to the CONFIG command family.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ConfigError {
+    RuntimeChangesNotSupported,
+    UnknownSubcommand { subcommand: String },
 }
 
 #[cfg(test)]

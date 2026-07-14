@@ -24,7 +24,10 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
+use crate::{
+    AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult, impl_cmd_clone_box,
+    impl_cmd_meta,
+};
 
 /// INFO command - Show server information including cluster status
 #[derive(Clone, Default)]
@@ -44,19 +47,10 @@ impl InfoCmd {
             },
         }
     }
-}
 
-impl Cmd for InfoCmd {
-    impl_cmd_meta!();
-    impl_cmd_clone_box!();
-
-    fn do_initial(&self, _client: &Client) -> bool {
-        true
-    }
-
-    fn do_cmd(&self, client: &Client, _storage: Arc<Storage>) {
-        let section = if client.argv().len() > 1 {
-            String::from_utf8_lossy(&client.argv()[1]).to_lowercase()
+    fn reply(argv: &[Vec<u8>]) -> RespData {
+        let section = if argv.len() > 1 {
+            String::from_utf8_lossy(&argv[1]).to_lowercase()
         } else {
             "default".to_string()
         };
@@ -98,14 +92,34 @@ impl Cmd for InfoCmd {
                 }
             }
             _ => {
-                // Default to server info for unknown sections
                 info.push_str("# Server\r\n");
                 info.push_str("redis_version:7.0.0\r\n");
                 info.push_str("redis_mode:standalone\r\n");
             }
         }
 
-        client.set_reply(RespData::BulkString(Some(Bytes::from(info))));
+        RespData::BulkString(Some(Bytes::from(info)))
+    }
+}
+
+impl Cmd for InfoCmd {
+    impl_cmd_meta!();
+    impl_cmd_clone_box!();
+
+    fn do_initial(&self, _client: &Client) -> bool {
+        true
+    }
+
+    fn do_cmd(&self, client: &Client, _storage: Arc<Storage>) {
+        client.set_reply(Self::reply(&client.argv()));
+    }
+
+    fn execute_typed(&self, client: &Client, _storage: Arc<Storage>) -> Option<CommandResult> {
+        Some(Ok(Self::reply(&client.argv())))
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 
@@ -185,5 +199,48 @@ impl Cmd for ConfigCmd {
                 client.set_error(error_catalog::unknown_config_subcommand(&subcommand));
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, _storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 2 {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let subcommand = String::from_utf8_lossy(&argv[1]).to_lowercase();
+            match subcommand.as_str() {
+                "get" if argv.len() < 3 => Err(crate::error::CommandError::WrongArity {
+                    command: "config get".to_string(),
+                }),
+                "get" => {
+                    let parameter = String::from_utf8_lossy(&argv[2]).to_lowercase();
+                    let reply = match parameter.as_str() {
+                        "cluster-enabled" => vec![
+                            RespData::BulkString(Some(Bytes::from("cluster-enabled"))),
+                            RespData::BulkString(Some(Bytes::from("no"))),
+                        ],
+                        "*" => vec![
+                            RespData::BulkString(Some(Bytes::from("cluster-enabled"))),
+                            RespData::BulkString(Some(Bytes::from("no"))),
+                            RespData::BulkString(Some(Bytes::from("port"))),
+                            RespData::BulkString(Some(Bytes::from("7379"))),
+                        ],
+                        _ => vec![],
+                    };
+                    Ok(RespData::Array(Some(reply)))
+                }
+                "set" => Err(crate::error::CommandError::Config(
+                    crate::error::ConfigError::RuntimeChangesNotSupported,
+                )),
+                _ => Err(crate::error::CommandError::Config(
+                    crate::error::ConfigError::UnknownSubcommand { subcommand },
+                )),
+            }
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
