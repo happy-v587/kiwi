@@ -233,6 +233,7 @@ mod is_stale_tests {
     use chrono::Utc;
     use kstd::lock_mgr::LockMgr;
     use std::sync::Arc;
+    use storage::error::{Error, StorageError};
     use storage::format_base_meta_value::HashesMetaValue;
     use storage::format_base_value::DataType;
     use storage::format_list_meta_value::ListsMetaValue;
@@ -284,17 +285,16 @@ mod is_stale_tests {
         let value = meta.encode();
 
         let result = redis.is_stale(&value);
-        assert!(
-            result.is_err(),
-            "DataType::None should return error, not panic"
-        );
-        let err_msg = format!("{:?}", result.unwrap_err());
-        assert!(
-            err_msg.contains("Unsupported meta data type")
-                || err_msg.contains("should not be used"),
-            "Error message should mention unsupported data type, got: {}",
-            err_msg
-        );
+        assert!(matches!(
+            result,
+            Err(Error::Typed {
+                error: StorageError::Corruption {
+                    operation: "inspect persisted value",
+                    ..
+                },
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -305,17 +305,16 @@ mod is_stale_tests {
         let value = meta.encode();
 
         let result = redis.is_stale(&value);
-        assert!(
-            result.is_err(),
-            "DataType::All should return error, not panic"
-        );
-        let err_msg = format!("{:?}", result.unwrap_err());
-        assert!(
-            err_msg.contains("Unsupported meta data type")
-                || err_msg.contains("should not be used"),
-            "Error message should mention unsupported data type, got: {}",
-            err_msg
-        );
+        assert!(matches!(
+            result,
+            Err(Error::Typed {
+                error: StorageError::Corruption {
+                    operation: "inspect persisted value",
+                    ..
+                },
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -324,9 +323,16 @@ mod is_stale_tests {
         let value = vec![255u8; 50];
 
         let result = redis.is_stale(&value);
-        assert!(result.is_err(), "Invalid type byte should return error");
-        let err_msg = format!("{:?}", result.unwrap_err());
-        assert!(err_msg.contains("Invalid data type byte"));
+        assert!(matches!(
+            result,
+            Err(Error::Typed {
+                error: StorageError::Corruption {
+                    operation: "inspect persisted value",
+                    ..
+                },
+                ..
+            })
+        ));
     }
 
     #[test]

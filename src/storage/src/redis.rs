@@ -39,7 +39,6 @@ use crate::custom_comparator::{
 };
 use crate::data_compaction_filter::DataCompactionFilterFactory;
 use crate::error::Error::RedisErr;
-use crate::error::InvalidFormatSnafu;
 use crate::error::{Error, OptionNoneSnafu, Result, RocksSnafu, StorageError};
 use crate::format_base_value::{DATA_TYPE_TAG, DataType};
 use crate::logindex::{
@@ -764,12 +763,23 @@ impl Redis {
             return Ok(false);
         }
 
-        let data_type = DataType::try_from(val_raw[0])?;
-        if val_raw.len() < data_type.min_meta_raw_len()? {
-            return InvalidFormatSnafu {
-                message: format!("Invalid value length for data type: {data_type:?}"),
-            }
-            .fail();
+        let data_type = DataType::try_from(val_raw[0]).map_err(|_| {
+            Error::corruption(
+                "inspect persisted value",
+                format!("invalid data type tag: {}", val_raw[0]),
+            )
+        })?;
+        let min_meta_raw_len = data_type.min_meta_raw_len().map_err(|_| {
+            Error::corruption(
+                "inspect persisted value",
+                format!("unsupported metadata data type: {data_type:?}"),
+            )
+        })?;
+        if val_raw.len() < min_meta_raw_len {
+            return Err(Error::corruption(
+                "inspect persisted value",
+                format!("invalid value length for data type: {data_type:?}"),
+            ));
         }
 
         let now = Utc::now().timestamp_micros() as u64;
@@ -778,9 +788,8 @@ impl Redis {
                 // | type(1B) | value | reserve(16B) | ctime(8B) | etime(8B) |
                 let etime_offset = val_raw.len() - 8;
                 let etime_bytes = &val_raw[etime_offset..etime_offset + 8];
-                let etime = u64::from_le_bytes(etime_bytes.try_into().map_err(|_| RedisErr {
-                    message: error_catalog::FAILED_TO_READ_ETIME.to_string(),
-                    location: Default::default(),
+                let etime = u64::from_le_bytes(etime_bytes.try_into().map_err(|_| {
+                    Error::corruption("inspect persisted value", "failed to read string etime")
                 })?);
 
                 if etime == 0 {
@@ -792,9 +801,8 @@ impl Redis {
                 // | type(1B) | count(8B) | version(8B) | reserve(16B) | ctime(8B) | etime(8B) |
                 let count_offset = TYPE_LENGTH;
                 let count_bytes = &val_raw[count_offset..count_offset + 8];
-                let count = u64::from_le_bytes(count_bytes.try_into().map_err(|_| RedisErr {
-                    message: error_catalog::FAILED_TO_READ_COUNT.to_string(),
-                    location: Default::default(),
+                let count = u64::from_le_bytes(count_bytes.try_into().map_err(|_| {
+                    Error::corruption("inspect persisted value", "failed to read metadata count")
                 })?);
 
                 if count == 0 {
@@ -803,9 +811,8 @@ impl Redis {
 
                 let etime_offset = val_raw.len() - 8;
                 let etime_bytes = &val_raw[etime_offset..etime_offset + 8];
-                let etime = u64::from_le_bytes(etime_bytes.try_into().map_err(|_| RedisErr {
-                    message: error_catalog::FAILED_TO_READ_ETIME.to_string(),
-                    location: Default::default(),
+                let etime = u64::from_le_bytes(etime_bytes.try_into().map_err(|_| {
+                    Error::corruption("inspect persisted value", "failed to read metadata etime")
                 })?);
 
                 if etime == 0 {
@@ -817,9 +824,8 @@ impl Redis {
                 // | type(1B) | count(8B) | version(8B) | left(8B) | right(8B) | reserve(16B) | ctime(8B) | etime(8B) |
                 let count_offset = TYPE_LENGTH;
                 let count_bytes = &val_raw[count_offset..count_offset + 8];
-                let count = u64::from_le_bytes(count_bytes.try_into().map_err(|_| RedisErr {
-                    message: error_catalog::FAILED_TO_READ_COUNT.to_string(),
-                    location: Default::default(),
+                let count = u64::from_le_bytes(count_bytes.try_into().map_err(|_| {
+                    Error::corruption("inspect persisted value", "failed to read list count")
                 })?);
 
                 if count == 0 {
@@ -828,9 +834,8 @@ impl Redis {
 
                 let etime_offset = val_raw.len() - 8;
                 let etime_bytes = &val_raw[etime_offset..etime_offset + 8];
-                let etime = u64::from_le_bytes(etime_bytes.try_into().map_err(|_| RedisErr {
-                    message: error_catalog::FAILED_TO_READ_ETIME.to_string(),
-                    location: Default::default(),
+                let etime = u64::from_le_bytes(etime_bytes.try_into().map_err(|_| {
+                    Error::corruption("inspect persisted value", "failed to read list etime")
                 })?);
 
                 if etime == 0 {
@@ -838,12 +843,10 @@ impl Redis {
                 }
                 Ok(etime < now)
             }
-            _ => InvalidFormatSnafu {
-                message: format!(
-                    "data type: {data_type:?} should not be used as meta value: {val_raw:?}"
-                ),
-            }
-            .fail(),
+            _ => Err(Error::corruption(
+                "inspect persisted value",
+                format!("data type {data_type:?} cannot be used as metadata"),
+            )),
         }
     }
 
