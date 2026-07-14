@@ -559,7 +559,7 @@ impl Redis {
                     let type_state = match self.check_type_state(val.as_slice(), DataType::String) {
                         Ok(state) => state,
                         Err(err) => {
-                            if err.to_string().contains("WRONGTYPE") {
+                            if err.is_wrong_type() {
                                 results.push(None);
                                 continue;
                             }

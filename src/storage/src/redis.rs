@@ -40,7 +40,7 @@ use crate::custom_comparator::{
 use crate::data_compaction_filter::DataCompactionFilterFactory;
 use crate::error::Error::RedisErr;
 use crate::error::InvalidFormatSnafu;
-use crate::error::{OptionNoneSnafu, Result, RocksSnafu};
+use crate::error::{Error, OptionNoneSnafu, Result, RocksSnafu, StorageError};
 use crate::format_base_value::{DATA_TYPE_TAG, DataType};
 use crate::logindex::{
     FlushTrigger, LogIndexAndSequenceCollector, LogIndexAndSequenceCollectorPurger,
@@ -651,9 +651,9 @@ impl Redis {
         Ok(())
     }
 
-    fn wrong_type_error() -> crate::error::Error {
-        RedisErr {
-            message: error_catalog::WRONGTYPE.to_string(),
+    fn wrong_type_error(expected: DataType, actual: DataType) -> Error {
+        Error::Typed {
+            error: StorageError::WrongType { expected, actual },
             location: Default::default(),
         }
     }
@@ -671,7 +671,26 @@ impl Redis {
             return Ok(TypeCheckState::Match);
         }
 
-        Err(Self::wrong_type_error())
+        let actual = match value_raw[0] {
+            0 => DataType::String,
+            1 => DataType::Hash,
+            2 => DataType::Set,
+            3 => DataType::List,
+            4 => DataType::ZSet,
+            5 => DataType::None,
+            6 => DataType::All,
+            tag => {
+                return Err(Error::Typed {
+                    error: StorageError::Corruption {
+                        operation: "check key type",
+                        detail: format!("unknown data type tag: {tag}"),
+                    },
+                    location: Default::default(),
+                });
+            }
+        };
+
+        Err(Self::wrong_type_error(expected, actual))
     }
 
     pub fn check_type(&self, value_raw: &[u8], key_type: DataType) -> Result<()> {

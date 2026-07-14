@@ -204,7 +204,7 @@ mod redis_zset_test {
         redis.set(live_wrongtype, b"value").unwrap();
         let mut card = 0;
         let err = redis.zcard(live_wrongtype, &mut card).unwrap_err();
-        assert!(err.to_string().contains("WRONGTYPE"));
+        assert!(err.is_wrong_type());
 
         let expired_wrongtype = b"zset_expired_wrongtype";
         redis.set(expired_wrongtype, b"value").unwrap();

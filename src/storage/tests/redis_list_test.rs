@@ -91,24 +91,15 @@ mod redis_list_test {
 
         let len_result = redis.llen(key);
         assert!(len_result.is_err(), "llen should fail on non-list key");
-        assert!(
-            len_result.unwrap_err().to_string().contains("WRONGTYPE"),
-            "llen should return WRONGTYPE"
-        );
+        assert!(len_result.unwrap_err().is_wrong_type());
 
         let lpush_result = redis.lpush(key, &[b"value".to_vec()]);
         assert!(lpush_result.is_err(), "lpush should fail on non-list key");
-        assert!(
-            lpush_result.unwrap_err().to_string().contains("WRONGTYPE"),
-            "lpush should return WRONGTYPE"
-        );
+        assert!(lpush_result.unwrap_err().is_wrong_type());
 
         let lrange_result = redis.lrange(key, 0, -1);
         assert!(lrange_result.is_err(), "lrange should fail on non-list key");
-        assert!(
-            lrange_result.unwrap_err().to_string().contains("WRONGTYPE"),
-            "lrange should return WRONGTYPE"
-        );
+        assert!(lrange_result.unwrap_err().is_wrong_type());
     }
 
     #[tokio::test]

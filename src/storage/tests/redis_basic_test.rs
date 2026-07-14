@@ -23,6 +23,7 @@ mod redis_basic_test {
 
     use bytes::Bytes;
     use kstd::lock_mgr::LockMgr;
+    use storage::error::{Error, StorageError};
     use storage::{
         BgTaskHandler, ColumnFamilyIndex, DataType, Redis, StorageOptions, TypeCheckState,
         format_base_meta_value::BaseMetaValue, format_strings_value::StringValue,
@@ -78,7 +79,16 @@ mod redis_basic_test {
         let err = redis
             .check_type_state(set_raw.as_ref(), DataType::String)
             .unwrap_err();
-        assert!(err.to_string().contains("WRONGTYPE"));
+        assert!(matches!(
+            err,
+            Error::Typed {
+                error: StorageError::WrongType {
+                    expected: DataType::String,
+                    actual: DataType::Set,
+                },
+                ..
+            }
+        ));
     }
 
     #[test]

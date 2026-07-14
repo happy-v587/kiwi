@@ -41,7 +41,7 @@ mod redis_hash_test {
         let live_wrongtype = b"hash_live_wrongtype";
         redis.set(live_wrongtype, b"value").unwrap();
         let err = redis.hlen(live_wrongtype).unwrap_err();
-        assert!(err.to_string().contains("WRONGTYPE"));
+        assert!(err.is_wrong_type());
 
         let expired_wrongtype = b"hash_expired_wrongtype";
         redis.set(expired_wrongtype, b"value").unwrap();

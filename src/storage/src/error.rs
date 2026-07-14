@@ -236,9 +236,31 @@ pub enum Error {
         #[snafu(implicit)]
         location: Location,
     },
+
+    #[snafu(display("{error}"))]
+    Typed {
+        #[snafu(source)]
+        error: StorageError,
+        #[snafu(implicit)]
+        location: Location,
+    },
 }
 
 impl Error {
+    /// Returns whether this legacy adapter wraps a typed key mismatch.
+    ///
+    /// Callers use this temporary semantic query instead of inspecting error
+    /// text while the storage API still returns the legacy [`Error`] wrapper.
+    pub fn is_wrong_type(&self) -> bool {
+        matches!(
+            self,
+            Error::Typed {
+                error: StorageError::WrongType { .. },
+                ..
+            }
+        )
+    }
+
     /// Convert this storage error into a RESP-safe error string.
     ///
     /// The returned text is intended to be placed directly into
@@ -252,6 +274,7 @@ impl Error {
             Error::InvalidFormat { message, .. }
             | Error::InvalidArgument { message, .. }
             | Error::Encoding { message, .. } => ensure_err_prefix(message),
+            error if error.is_wrong_type() => error_catalog::WRONGTYPE.to_string(),
             Error::KeyNotFound { .. } => error_catalog::KEY_NOT_FOUND.to_string(),
             _ => INTERNAL_SERVER_ERROR.to_string(),
         };

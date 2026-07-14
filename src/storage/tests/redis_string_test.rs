@@ -769,10 +769,7 @@ mod redis_string_test {
 
         let get_result = redis.get(key);
         assert!(get_result.is_err(), "get should fail on non-string key");
-        assert!(
-            get_result.unwrap_err().to_string().contains("WRONGTYPE"),
-            "get should return WRONGTYPE"
-        );
+        assert!(get_result.unwrap_err().is_wrong_type());
 
         let mget_result = redis.mget(&[key.to_vec()]).unwrap();
         assert_eq!(mget_result, vec![None]);
@@ -782,23 +779,14 @@ mod redis_string_test {
             strlen_result.is_err(),
             "strlen should fail on non-string key"
         );
-        assert!(
-            strlen_result.unwrap_err().to_string().contains("WRONGTYPE"),
-            "strlen should return WRONGTYPE"
-        );
+        assert!(strlen_result.unwrap_err().is_wrong_type());
 
         let getrange_result = redis.getrange(key, 0, 2);
         assert!(
             getrange_result.is_err(),
             "getrange should fail on non-string key"
         );
-        assert!(
-            getrange_result
-                .unwrap_err()
-                .to_string()
-                .contains("WRONGTYPE"),
-            "getrange should return WRONGTYPE"
-        );
+        assert!(getrange_result.unwrap_err().is_wrong_type());
 
         cleanup_redis(redis, &test_db_path);
     }
@@ -817,7 +805,7 @@ mod redis_string_test {
         let live_wrongtype = b"getbit_live_wrongtype";
         redis.hset(live_wrongtype, b"field", b"value").unwrap();
         let err = redis.getbit(live_wrongtype, 0).unwrap_err();
-        assert!(err.to_string().contains("WRONGTYPE"));
+        assert!(err.is_wrong_type());
 
         let expired_wrongtype = b"getbit_expired_wrongtype";
         redis.hset(expired_wrongtype, b"field", b"value").unwrap();
@@ -848,10 +836,7 @@ mod redis_string_test {
             getset_result.is_err(),
             "GETSET should reject non-string keys"
         );
-        assert!(
-            getset_result.unwrap_err().to_string().contains("WRONGTYPE"),
-            "GETSET should return WRONGTYPE"
-        );
+        assert!(getset_result.unwrap_err().is_wrong_type());
         assert_eq!(redis.get_key_type(key).unwrap(), DataType::Hash);
 
         cleanup_redis(redis, &test_db_path);
