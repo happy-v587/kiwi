@@ -368,6 +368,24 @@ impl Cmd for BaseCmdGroup {
         }
     }
 
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        if argv.len() < 2 {
+            return Some(Err(CommandError::WrongArity {
+                command: self.name().to_string(),
+            }));
+        }
+
+        let sub_cmd_name = String::from_utf8_lossy(&argv[1]).to_lowercase();
+        match self.sub_cmds.get(&sub_cmd_name) {
+            Some(sub_cmd) => sub_cmd.execute_typed(client, storage),
+            None => Some(Err(CommandError::UnknownSubcommand {
+                command: self.name().to_string(),
+                subcommand: sub_cmd_name,
+            })),
+        }
+    }
+
     fn has_sub_command(&self) -> bool {
         true
     }

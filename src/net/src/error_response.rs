@@ -49,6 +49,10 @@ impl RedisErrorRenderer {
         match error {
             CommandError::WrongType => error_catalog::WRONGTYPE.to_string(),
             CommandError::WrongArity { command } => error_catalog::wrong_number(command),
+            CommandError::UnknownSubcommand {
+                command,
+                subcommand,
+            } => error_catalog::unknown_command(command, subcommand),
             CommandError::InvalidArgument(ArgumentError::Syntax) => {
                 error_catalog::SYNTAX_ERROR.to_string()
             }

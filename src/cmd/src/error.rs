@@ -30,6 +30,9 @@ pub enum CommandError {
     #[error("wrong number of arguments for {command}")]
     WrongArity { command: String },
 
+    #[error("unknown subcommand {command} {subcommand}")]
+    UnknownSubcommand { command: String, subcommand: String },
+
     #[error("invalid command argument")]
     InvalidArgument(ArgumentError),
 
