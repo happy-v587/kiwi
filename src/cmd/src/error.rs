@@ -89,6 +89,7 @@ pub enum ArgumentError {
     NotInteger,
     NotFloat,
     OutOfRange,
+    OffsetOutOfRange,
     InvalidCursor,
 }
 

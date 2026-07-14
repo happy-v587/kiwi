@@ -65,6 +65,9 @@ impl RedisErrorRenderer {
             CommandError::InvalidArgument(ArgumentError::OutOfRange) => {
                 error_catalog::VALUE_OUT_OF_RANGE_MUST_BE_POSITIVE.to_string()
             }
+            CommandError::InvalidArgument(ArgumentError::OffsetOutOfRange) => {
+                error_catalog::OFFSET_OUT_OF_RANGE.to_string()
+            }
             CommandError::InvalidArgument(ArgumentError::InvalidCursor) => {
                 error_catalog::INVALID_CURSOR.to_string()
             }
