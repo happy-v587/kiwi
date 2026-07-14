@@ -32,11 +32,11 @@
 
 **Consumes:** Existing `RespError` and `RespResult` parser API.
 
-**Produces:** `ParseError` and `ParseResult`; HELLO uses a dedicated error rather than a parser error for command semantics.
+**Produces:** `ParseError`, `ParseResult`, and a local `HelloError`; HELLO uses `HelloError` rather than a parser error for command semantics. Task 3 maps `HelloError` into the new `CommandError` once that type exists.
 
 - [ ] Write compile-focused tests proving parser APIs use `ParseError` and malformed RESP still yields `ParseError::Incomplete` or `ParseError::InvalidData`.
 - [ ] Run `cargo test -p resp` and confirm the new test fails because `ParseError` does not exist.
-- [ ] Rename `RespError` to `ParseError`, rename `RespResult` to `ParseResult`, and remove command-semantic variants (`UnknownCommand`, `UnknownSubCommand`, `SyntaxError`, `WrongNumberOfArguments`, `UnknownError`).
+- [ ] Rename `RespError` to `ParseError`, rename `RespResult` to `ParseResult`, and remove command-semantic variants (`UnknownCommand`, `UnknownSubCommand`, `SyntaxError`, `WrongNumberOfArguments`, `UnknownError`). Add `HelloError` in `resp::negotiation` for HELLO authentication and option validation failures.
 - [ ] Update parser and RESP command conversion call sites to use the new names.
 - [ ] Run `cargo test -p resp` and `make fmt`; confirm all RESP tests pass.
 - [ ] Commit: `refactor(resp): rename parser error type`.
