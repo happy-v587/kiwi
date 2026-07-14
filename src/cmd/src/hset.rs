@@ -21,7 +21,10 @@ use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, impl_cmd_clone_box, impl_cmd_meta};
+use crate::{
+    AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult, impl_cmd_clone_box,
+    impl_cmd_meta,
+};
 
 #[derive(Clone, Default)]
 pub struct HSetCmd {
@@ -76,5 +79,27 @@ impl Cmd for HSetCmd {
         }
 
         client.set_reply(RespData::Integer(total_added as i64));
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(if argv.len() < 4 || !(argv.len() - 2).is_multiple_of(2) {
+            Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            })
+        } else {
+            let mut total_added = 0;
+            for field_value in argv[2..].chunks_exact(2) {
+                match storage.hset(&argv[1], &field_value[0], &field_value[1]) {
+                    Ok(added) => total_added += added,
+                    Err(error) => return Some(Err(crate::error::CommandError::storage(error))),
+                }
+            }
+            Ok(RespData::Integer(total_added.into()))
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }

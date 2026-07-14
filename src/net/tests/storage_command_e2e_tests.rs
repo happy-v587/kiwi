@@ -237,6 +237,33 @@ async fn storage_command_e2e_append_and_strlen_use_typed_replies() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_hash_get_and_set_use_typed_replies() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(&mut stream, &["HSET", "hash", "field", "value"]).await,
+        RespData::Integer(1)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HSET", "hash", "field", "new-value"]).await,
+        RespData::Integer(0)
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HGET", "hash", "field"]).await,
+        RespData::BulkString(Some(Bytes::from_static(b"new-value")))
+    );
+    assert_eq!(
+        send_command(&mut stream, &["HGET", "hash", "missing-field"]).await,
+        RespData::BulkString(None)
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)
