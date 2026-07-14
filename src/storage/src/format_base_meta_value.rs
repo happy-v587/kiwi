@@ -19,11 +19,10 @@ use std::io::Cursor;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use chrono::Utc;
-use snafu::ensure;
 
 use crate::{
     delegate_internal_value, delegate_parsed_value,
-    error::{InvalidFormatSnafu, Result},
+    error::{Error, Result},
     format_base_value::{DataType, InternalValue, ParsedInternalValue},
     storage_define::{
         BASE_META_VALUE_COUNT_LENGTH, BASE_META_VALUE_LENGTH, SUFFIX_RESERVE_LENGTH,
@@ -106,19 +105,22 @@ impl ParsedBaseMetaValue {
     {
         let value: BytesMut = internal_value.into();
         let value_len = value.len();
-        ensure!(
-            value_len >= BASE_META_VALUE_LENGTH,
-            InvalidFormatSnafu {
-                message: format!(
+        if value_len < BASE_META_VALUE_LENGTH {
+            return Err(Error::corruption(
+                "decode base metadata",
+                format!(
                     "invalid meta value length: {} < {}",
                     value.len(),
                     BASE_META_VALUE_LENGTH,
-                )
-            }
-        );
+                ),
+            ));
+        }
 
         let mut val_reader = Cursor::new(&value[..]);
-        let data_type: DataType = val_reader.get_u8().try_into()?;
+        let data_type: DataType = val_reader
+            .get_u8()
+            .try_into()
+            .map_err(|_| Error::corruption("decode base metadata", "invalid data type tag"))?;
         let pos = val_reader.position() as usize;
 
         let count_range = pos..pos + BASE_META_VALUE_COUNT_LENGTH;
@@ -331,6 +333,7 @@ mod parsed_base_meta_value_tests {
     use bytes::BytesMut;
 
     use super::*;
+    use crate::error::{Error, StorageError};
     use crate::format_base_value::DataType;
 
     const TEST_VERSION: u64 = 123456789;
@@ -370,7 +373,16 @@ mod parsed_base_meta_value_tests {
         buf.put_u64_le(TEST_COUNT);
 
         let meta = ParsedBaseMetaValue::new(buf);
-        assert!(meta.is_err());
+        assert!(matches!(
+            meta,
+            Err(Error::Typed {
+                error: StorageError::Corruption {
+                    operation: "decode base metadata",
+                    ..
+                },
+                ..
+            })
+        ));
     }
 
     #[test]
