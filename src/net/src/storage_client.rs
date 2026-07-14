@@ -26,7 +26,8 @@ use std::time::Duration;
 use log::debug;
 use resp::RespData;
 use runtime::{
-    DualRuntimeError, RequestPriority, StorageClient as RuntimeStorageClient, StorageCommand,
+    DualRuntimeError, ExecutionError, RequestPriority, StorageClient as RuntimeStorageClient,
+    StorageCommand,
 };
 
 /// Network-side storage client that provides Redis command methods
@@ -71,7 +72,7 @@ impl StorageClient {
         &self,
         cmd_name: &[u8],
         argv: &[Vec<u8>],
-    ) -> Result<RespData, DualRuntimeError> {
+    ) -> Result<cmd::CommandResult, ExecutionError> {
         debug!(
             "StorageClient::execute_command - cmd: {:?}, argc: {}",
             String::from_utf8_lossy(cmd_name),
@@ -83,7 +84,7 @@ impl StorageClient {
             argv: argv.to_vec(),
         };
 
-        self.inner.send_request(command).await
+        self.inner.send_command_request(command).await
     }
 
     // Advanced methods with custom timeout and priority

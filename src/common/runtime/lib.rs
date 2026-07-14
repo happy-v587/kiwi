@@ -53,7 +53,8 @@ pub use message::{
     BackpressureConfig, ChannelStats, CircuitBreaker, MessageChannel, NoopStorageStatsCollector,
     QueueStats, QueuedRequest, RecoveryConfig, RecoveryManager, RecoveryState, RecoveryStats,
     RequestError, RequestId, RequestPriority, RequestQueue, RetryConfig, StorageClient,
-    StorageCommand, StorageRequest, StorageResponse, StorageStats, StorageStatsCollector,
+    StorageCommand, StorageCommandResponse, StorageRequest, StorageResponse, StorageStats,
+    StorageStatsCollector,
 };
 pub use metrics::{
     BatchMetrics, ChannelHealth, ChannelMetrics, ChannelMetricsTracker, CompactionStats,

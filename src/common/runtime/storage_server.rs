@@ -35,8 +35,8 @@ use storage::storage::Storage;
 use crate::error::DualRuntimeError;
 use crate::global_storage::GlobalStorage;
 use crate::message::{
-    NoopStorageStatsCollector, RequestPriority, StorageCommand, StorageRequest, StorageResponse,
-    StorageStatsCollector,
+    NoopStorageStatsCollector, RequestPriority, StorageCommand, StorageCommandResponse,
+    StorageRequest, StorageResponse, StorageStatsCollector,
 };
 use crate::metrics::StorageMetricsTracker;
 
@@ -513,7 +513,7 @@ impl StorageServer {
     async fn execute_storage_command(
         storage: &Arc<Storage>,
         command: &StorageCommand,
-    ) -> Result<RespData, storage::error::Error> {
+    ) -> Result<StorageCommandResponse, storage::error::Error> {
         match command {
             StorageCommand::Execute { cmd_name, argv } => {
                 Self::handle_execute_command(storage, cmd_name, argv).await
@@ -522,11 +522,14 @@ impl StorageServer {
                 let mut results = Vec::with_capacity(commands.len());
 
                 for command in commands {
-                    let result = Box::pin(Self::execute_storage_command(storage, command)).await?;
+                    let result =
+                        Box::pin(Self::execute_legacy_storage_command(storage, command)).await?;
                     results.push(result);
                 }
 
-                Ok(RespData::Array(Some(results)))
+                Ok(StorageCommandResponse::Reply(RespData::Array(Some(
+                    results,
+                ))))
             }
         }
     }
@@ -1180,7 +1183,7 @@ impl StorageServer {
         storage: &Arc<Storage>,
         cmd_name: &[u8],
         argv: &[Vec<u8>],
-    ) -> Result<RespData, storage::error::Error> {
+    ) -> Result<StorageCommandResponse, storage::error::Error> {
         let command_name = String::from_utf8_lossy(cmd_name).to_lowercase();
         let Some(cmd_table) = STORAGE_COMMAND_TABLE.get() else {
             return SystemSnafu {
@@ -1203,8 +1206,62 @@ impl StorageServer {
         client.set_argv(argv);
         client.set_authenticated(true);
 
+        if let Some(result) = command.execute_typed(&client, Arc::clone(storage)) {
+            return Ok(match result {
+                Ok(reply) => StorageCommandResponse::Reply(reply),
+                Err(error) => StorageCommandResponse::CommandError(error),
+            });
+        }
+
         command.execute(&client, Arc::clone(storage));
-        Ok(client.take_reply())
+        Ok(StorageCommandResponse::Reply(client.take_reply()))
+    }
+
+    /// Compatibility bridge for callers of `StorageCommand::Batch`.
+    ///
+    /// Batch replies are encoded as one RESP array and cannot yet preserve a
+    /// structured error for each element. Single-command network execution
+    /// uses `handle_execute_command` above and receives typed errors.
+    async fn execute_legacy_storage_command(
+        storage: &Arc<Storage>,
+        command: &StorageCommand,
+    ) -> Result<RespData, storage::error::Error> {
+        match command {
+            StorageCommand::Execute { cmd_name, argv } => {
+                let command_name = String::from_utf8_lossy(cmd_name).to_lowercase();
+                let Some(cmd_table) = STORAGE_COMMAND_TABLE.get() else {
+                    return SystemSnafu {
+                        message: "storage command table not initialized".to_string(),
+                    }
+                    .fail();
+                };
+                let Some(command) = cmd_table.get(command_name.as_str()) else {
+                    return SystemSnafu {
+                        message: format!(
+                            "command '{}' not supported in storage runtime",
+                            command_name
+                        ),
+                    }
+                    .fail();
+                };
+
+                let client = Client::new(Box::new(RuntimeCommandStream));
+                client.set_cmd_name(cmd_name);
+                client.set_argv(argv);
+                client.set_authenticated(true);
+                command.execute(&client, Arc::clone(storage));
+                Ok(client.take_reply())
+            }
+            StorageCommand::Batch { commands } => {
+                let mut results = Vec::with_capacity(commands.len());
+                for command in commands {
+                    results.push(
+                        Box::pin(Self::execute_legacy_storage_command(storage, command)).await?,
+                    );
+                }
+                Ok(RespData::Array(Some(results)))
+            }
+        }
     }
 }
 
@@ -1227,6 +1284,15 @@ mod tests {
         initialize_storage_command_table(Arc::new(|| None));
 
         (Arc::new(storage), db_path)
+    }
+
+    fn expect_reply(response: StorageCommandResponse) -> RespData {
+        match response {
+            StorageCommandResponse::Reply(reply) => reply,
+            StorageCommandResponse::CommandError(error) => {
+                panic!("expected reply, got command error: {error:?}")
+            }
+        }
     }
 
     #[test]
@@ -1257,9 +1323,11 @@ mod tests {
             argv: vec![b"set".to_vec(), b"k".to_vec(), b"v".to_vec()],
         };
         assert_eq!(
-            StorageServer::execute_storage_command(&storage, &set)
-                .await
-                .expect("SET should execute"),
+            expect_reply(
+                StorageServer::execute_storage_command(&storage, &set)
+                    .await
+                    .expect("SET should execute"),
+            ),
             RespData::SimpleString("OK".into())
         );
 
@@ -1268,9 +1336,11 @@ mod tests {
             argv: vec![b"get".to_vec(), b"k".to_vec()],
         };
         assert_eq!(
-            StorageServer::execute_storage_command(&storage, &get)
-                .await
-                .expect("GET should execute"),
+            expect_reply(
+                StorageServer::execute_storage_command(&storage, &get)
+                    .await
+                    .expect("GET should execute"),
+            ),
             RespData::BulkString(Some(b"v".to_vec().into()))
         );
 
@@ -1284,9 +1354,11 @@ mod tests {
             ],
         };
         assert_eq!(
-            StorageServer::execute_storage_command(&storage, &hset)
-                .await
-                .expect("HSET should execute through the command table"),
+            expect_reply(
+                StorageServer::execute_storage_command(&storage, &hset)
+                    .await
+                    .expect("HSET should execute through the command table"),
+            ),
             RespData::Integer(1)
         );
 
@@ -1295,9 +1367,11 @@ mod tests {
             argv: vec![b"hget".to_vec(), b"h".to_vec(), b"field".to_vec()],
         };
         assert_eq!(
-            StorageServer::execute_storage_command(&storage, &hget)
-                .await
-                .expect("HGET should execute through the command table"),
+            expect_reply(
+                StorageServer::execute_storage_command(&storage, &hget)
+                    .await
+                    .expect("HGET should execute through the command table"),
+            ),
             RespData::BulkString(Some(b"value".to_vec().into()))
         );
 
@@ -1306,9 +1380,11 @@ mod tests {
             argv: vec![b"hdel".to_vec(), b"h".to_vec(), b"field".to_vec()],
         };
         assert_eq!(
-            StorageServer::execute_storage_command(&storage, &hdel)
-                .await
-                .expect("HDEL should execute through the command table"),
+            expect_reply(
+                StorageServer::execute_storage_command(&storage, &hdel)
+                    .await
+                    .expect("HDEL should execute through the command table"),
+            ),
             RespData::Integer(1)
         );
 
@@ -1317,11 +1393,41 @@ mod tests {
             argv: vec![b"del".to_vec(), b"k".to_vec()],
         };
         assert_eq!(
-            StorageServer::execute_storage_command(&storage, &del)
-                .await
-                .expect("DEL should execute"),
+            expect_reply(
+                StorageServer::execute_storage_command(&storage, &del)
+                    .await
+                    .expect("DEL should execute"),
+            ),
             RespData::Integer(1)
         );
+
+        drop(storage);
+        safe_cleanup_test_db(&db_path);
+    }
+
+    #[tokio::test]
+    async fn typed_get_preserves_wrong_type_across_the_runtime_boundary() {
+        let (storage, db_path) = opened_test_storage();
+
+        let lpush = StorageCommand::Execute {
+            cmd_name: b"lpush".to_vec(),
+            argv: vec![b"lpush".to_vec(), b"list".to_vec(), b"member".to_vec()],
+        };
+        StorageServer::execute_storage_command(&storage, &lpush)
+            .await
+            .expect("LPUSH should execute");
+
+        let get = StorageCommand::Execute {
+            cmd_name: b"get".to_vec(),
+            argv: vec![b"get".to_vec(), b"list".to_vec()],
+        };
+
+        assert!(matches!(
+            StorageServer::execute_storage_command(&storage, &get)
+                .await
+                .expect("GET should complete with a semantic result"),
+            StorageCommandResponse::CommandError(cmd::error::CommandError::WrongType)
+        ));
 
         drop(storage);
         safe_cleanup_test_db(&db_path);

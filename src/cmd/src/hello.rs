@@ -253,28 +253,28 @@ mod tests {
             .execute_typed(&client, make_storage())
             .expect("HELLO supports typed execution");
 
-        assert_eq!(
+        assert!(matches!(
             result,
             Err(crate::error::CommandError::Hello(HelloError::WrongPassword))
-        );
+        ));
         assert!(!client.is_authenticated());
         assert_eq!(client.take_reply(), RespData::default());
     }
 
     #[test]
     fn hello_errors_are_mapped_to_typed_command_errors() {
-        assert_eq!(
+        assert!(matches!(
             command_error_from_hello(HelloError::WrongPassword),
             crate::error::CommandError::Hello(HelloError::WrongPassword)
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             command_error_from_hello(HelloError::NoPasswordConfigured),
             crate::error::CommandError::Hello(HelloError::NoPasswordConfigured)
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             command_error_from_hello(HelloError::AuthenticationRequired),
             crate::error::CommandError::Hello(HelloError::AuthenticationRequired)
-        );
+        ));
     }
 
     #[test]

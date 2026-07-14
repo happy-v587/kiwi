@@ -30,6 +30,7 @@ use uuid::Uuid;
 
 use crate::error_logging::{CorrelationId, ErrorLogger, RuntimeContext};
 
+use cmd::{CommandResult, error::CommandError};
 use resp::RespData;
 use storage::error::Error as StorageError;
 
@@ -161,13 +162,42 @@ pub enum RequestPriority {
     Critical = 3,
 }
 
-/// Response sent from storage runtime back to network runtime
+/// Semantic result of one storage-runtime command execution.
+///
+/// A command error deliberately remains structured until the network runtime
+/// renders the client reply. `Reply` keeps the compatibility path for command
+/// implementations that have not migrated yet.
+#[derive(Debug)]
+pub enum StorageCommandResponse {
+    Reply(RespData),
+    CommandError(CommandError),
+}
+
+impl StorageCommandResponse {
+    fn into_legacy_reply(self) -> Result<RespData, crate::error::DualRuntimeError> {
+        match self {
+            Self::Reply(reply) => Ok(reply),
+            Self::CommandError(error) => {
+                Err(crate::error::DualRuntimeError::Storage(error.to_string()))
+            }
+        }
+    }
+
+    fn into_command_result(self) -> CommandResult {
+        match self {
+            Self::Reply(reply) => Ok(reply),
+            Self::CommandError(error) => Err(error),
+        }
+    }
+}
+
+/// Response sent from storage runtime back to network runtime.
 #[derive(Debug)]
 pub struct StorageResponse {
     /// Request ID this response corresponds to
     pub id: RequestId,
     /// Result of the storage operation
-    pub result: Result<RespData, StorageError>,
+    pub result: Result<StorageCommandResponse, StorageError>,
     /// Time taken to execute the storage operation
     pub execution_time: Duration,
     /// Statistics about the storage operation
@@ -838,6 +868,20 @@ impl StorageClient {
             .await
     }
 
+    /// Execute one Redis command while preserving command-semantic failures.
+    ///
+    /// The network runtime is the only caller of this method. It receives a
+    /// `CommandResult` and is therefore the sole owner of RESP error rendering.
+    pub async fn send_command_request(
+        &self,
+        command: StorageCommand,
+    ) -> Result<CommandResult, crate::error::ExecutionError> {
+        self.send_request_response(command, self.default_timeout, RequestPriority::Normal)
+            .await
+            .map(StorageCommandResponse::into_command_result)
+            .map_err(|error| crate::error::ExecutionError::from(&error))
+    }
+
     /// Send a storage request with a custom timeout
     pub async fn send_request_with_timeout(
         &self,
@@ -855,6 +899,18 @@ impl StorageClient {
         timeout: Duration,
         priority: RequestPriority,
     ) -> Result<RespData, crate::error::DualRuntimeError> {
+        self.send_request_response(command, timeout, priority)
+            .await
+            .and_then(StorageCommandResponse::into_legacy_reply)
+    }
+
+    /// Shared retry, recovery, and backpressure path for all runtime requests.
+    async fn send_request_response(
+        &self,
+        command: StorageCommand,
+        timeout: Duration,
+        priority: RequestPriority,
+    ) -> Result<StorageCommandResponse, crate::error::DualRuntimeError> {
         let start_time = Instant::now();
         let mut last_error = None;
 
@@ -902,7 +958,7 @@ impl StorageClient {
             let remaining_timeout = timeout - elapsed;
 
             match self
-                .try_send_request(command.clone(), remaining_timeout, priority)
+                .try_send_request_response(command.clone(), remaining_timeout, priority)
                 .await
             {
                 Ok(data) => {
@@ -992,12 +1048,12 @@ impl StorageClient {
     }
 
     /// Try to send a single request without retry logic
-    async fn try_send_request(
+    async fn try_send_request_response(
         &self,
         command: StorageCommand,
         timeout: Duration,
         priority: RequestPriority,
-    ) -> Result<RespData, crate::error::DualRuntimeError> {
+    ) -> Result<StorageCommandResponse, crate::error::DualRuntimeError> {
         let request_id = RequestId::new();
         let (response_sender, response_receiver) = oneshot::channel();
 
@@ -1133,7 +1189,7 @@ impl StorageClient {
         command: StorageCommand,
         timeout: Duration,
         priority: RequestPriority,
-    ) -> Result<RespData, crate::error::DualRuntimeError> {
+    ) -> Result<StorageCommandResponse, crate::error::DualRuntimeError> {
         // Check if recovery should be attempted
         let should_recover = {
             let recovery_manager = self.recovery_manager.lock().await;
@@ -1169,14 +1225,14 @@ impl StorageClient {
         command: StorageCommand,
         timeout: Duration,
         priority: RequestPriority,
-    ) -> Result<RespData, crate::error::DualRuntimeError> {
+    ) -> Result<StorageCommandResponse, crate::error::DualRuntimeError> {
         // Use more conservative timeout and retry settings for degraded storage
         let degraded_timeout = timeout.min(Duration::from_secs(10));
         let degraded_retries = self.retry_config.max_retries.min(2);
 
         for attempt in 0..=degraded_retries {
             match self
-                .try_send_request(command.clone(), degraded_timeout, priority)
+                .try_send_request_response(command.clone(), degraded_timeout, priority)
                 .await
             {
                 Ok(data) => {
@@ -1212,7 +1268,7 @@ impl StorageClient {
         command: StorageCommand,
         timeout: Duration,
         priority: RequestPriority,
-    ) -> Result<RespData, crate::error::DualRuntimeError> {
+    ) -> Result<StorageCommandResponse, crate::error::DualRuntimeError> {
         let request_id = RequestId::new();
         let (response_sender, _response_receiver) = oneshot::channel();
 
@@ -1250,10 +1306,10 @@ impl StorageClient {
         command: StorageCommand,
         timeout: Duration,
         priority: RequestPriority,
-    ) -> Result<RespData, crate::error::DualRuntimeError> {
+    ) -> Result<StorageCommandResponse, crate::error::DualRuntimeError> {
         // Use a shorter timeout for recovery attempts
         let recovery_timeout = timeout.min(Duration::from_secs(5));
-        self.try_send_request(command, recovery_timeout, priority)
+        self.try_send_request_response(command, recovery_timeout, priority)
             .await
     }
 
@@ -1278,7 +1334,7 @@ impl StorageClient {
 
                     if remaining_timeout > Duration::from_millis(100) {
                         let result = self
-                            .try_send_request(
+                            .try_send_request_response(
                                 queued.request.command,
                                 remaining_timeout,
                                 queued.request.priority,

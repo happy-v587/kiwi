@@ -214,6 +214,29 @@ async fn storage_command_e2e_set_get_round_trip() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_get_wrong_type_is_rendered_at_network_boundary() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    let reply = send_command(&mut stream, &["LPUSH", "list_key", "member"]).await;
+    assert_eq!(reply, RespData::Integer(1));
+
+    let reply = send_command(&mut stream, &["GET", "list_key"]).await;
+    assert!(
+        matches!(reply, RespData::Error(_)),
+        "expected error, got {reply:?}"
+    );
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::WRONGTYPE
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_wrong_number_of_arguments_returns_resp_error() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)

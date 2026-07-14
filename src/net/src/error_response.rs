@@ -90,6 +90,7 @@ impl RedisErrorRenderer {
             CommandError::Hello(HelloError::AuthenticationRequired) => {
                 error_catalog::HELLO_AUTH_REQUIRED.to_string()
             }
+            CommandError::Storage(_) => error_catalog::INTERNAL_SERVER_ERROR.to_string(),
             CommandError::Internal => error_catalog::INTERNAL_SERVER_ERROR.to_string(),
         }
     }

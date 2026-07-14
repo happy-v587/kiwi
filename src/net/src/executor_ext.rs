@@ -29,7 +29,7 @@ use cmd::ClientExt;
 use cmd::CmdFlags;
 use executor::CmdExecutor;
 use log::{debug, error};
-use runtime::{DualRuntimeError, ExecutionError};
+use runtime::DualRuntimeError;
 use storage::storage::Storage;
 
 use crate::error_response::RedisErrorRenderer;
@@ -133,15 +133,22 @@ async fn execute_generic_command(exec: &NetworkCmdExecution) -> Result<(), DualR
         .execute_command(cmd_name.as_slice(), &argv)
         .await
     {
-        Ok(response) => exec.client.set_reply(response),
+        Ok(Ok(response)) => exec.client.set_reply(response),
+        Ok(Err(error)) => {
+            error!(
+                "Generic command execution failed for '{}': {error:?}",
+                cmd_name_str
+            );
+            exec.client
+                .set_reply(RedisErrorRenderer::render_command(&error));
+        }
         Err(e) => {
             error!(
                 "Generic command execution failed for '{}': {}",
                 cmd_name_str, e
             );
-            let execution_error = ExecutionError::from(&e);
             exec.client
-                .set_reply(RedisErrorRenderer::render_execution(&execution_error));
+                .set_reply(RedisErrorRenderer::render_execution(&e));
         }
     }
 

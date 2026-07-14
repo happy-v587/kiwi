@@ -22,7 +22,7 @@ use thiserror::Error;
 ///
 /// This type deliberately contains no wire-level RESP text. The network layer
 /// owns the mapping from these variants to client-visible replies.
-#[derive(Debug, Error, Clone, PartialEq, Eq)]
+#[derive(Debug, Error)]
 pub enum CommandError {
     #[error("wrong key type")]
     WrongType,
@@ -42,8 +42,23 @@ pub enum CommandError {
     #[error(transparent)]
     Hello(#[from] HelloError),
 
+    #[error("storage command failure")]
+    Storage(#[source] Box<storage::error::Error>),
+
     #[error("internal command failure")]
     Internal,
+}
+
+impl CommandError {
+    /// Preserve storage details for server-side logging while keeping expected
+    /// wrong-type failures as a Redis command semantic.
+    pub fn storage(error: storage::error::Error) -> Self {
+        if error.is_wrong_type() {
+            Self::WrongType
+        } else {
+            Self::Storage(Box::new(error))
+        }
+    }
 }
 
 /// Reusable categories for invalid command arguments.
