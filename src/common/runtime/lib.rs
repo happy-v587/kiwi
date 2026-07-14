@@ -42,7 +42,7 @@ mod additional_unit_tests;
 mod stress_tests;
 
 pub use config::RuntimeConfig;
-pub use error::DualRuntimeError;
+pub use error::{DualRuntimeError, ExecutionError};
 pub use error_logging::{
     CorrelationId, ErrorCategory, ErrorEvent, ErrorLogger, ErrorLoggingConfig, ErrorMetrics,
     ErrorRates, RuntimeContext, get_global_error_logger, init_global_error_logger,

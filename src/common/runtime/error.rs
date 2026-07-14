@@ -16,7 +16,38 @@
 // limitations under the License.
 
 use std::time::Duration;
+
+use cmd::error::CommandError;
 use thiserror::Error;
+
+/// Bounded failures while dispatching a command across the runtime boundary.
+///
+/// This is the target replacement for [`DualRuntimeError`]. It deliberately
+/// carries semantic variants rather than descriptions that callers need to
+/// parse again.
+#[derive(Debug, Error)]
+pub enum ExecutionError {
+    #[error("command execution failed: {0}")]
+    Command(#[from] CommandError),
+
+    #[error("request timeout after {timeout:?}")]
+    Timeout { timeout: Duration },
+
+    #[error("runtime unavailable while {stage}")]
+    Unavailable { stage: &'static str },
+
+    #[error("runtime request queue is overloaded")]
+    Overloaded,
+
+    #[error("runtime request channel closed")]
+    ChannelClosed,
+
+    #[error("runtime is shutting down")]
+    ShuttingDown,
+
+    #[error("runtime worker stopped")]
+    WorkerStopped,
+}
 
 /// Errors that can occur in the dual runtime architecture
 #[derive(Debug, Error, Clone)]
@@ -150,6 +181,13 @@ impl DualRuntimeError {
         use storage::error::Error as StorageError;
 
         match err {
+            StorageError::Typed { error, .. } => match error {
+                storage::error::StorageError::Io { .. } => true,
+                storage::error::StorageError::Engine { .. }
+                | storage::error::StorageError::Corruption { .. }
+                | storage::error::StorageError::InvalidState { .. }
+                | storage::error::StorageError::WrongType { .. } => false,
+            },
             // Recoverable: transient errors that can be retried
             StorageError::Io { .. } => true,
             StorageError::Mpsc { .. } => true,
@@ -309,6 +347,26 @@ pub enum ErrorSeverity {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn execution_error_keeps_dispatch_failures_semantic() {
+        assert!(matches!(
+            ExecutionError::Timeout {
+                timeout: Duration::from_secs(1)
+            },
+            ExecutionError::Timeout { .. }
+        ));
+        assert!(matches!(
+            ExecutionError::ChannelClosed,
+            ExecutionError::ChannelClosed
+        ));
+        assert!(matches!(
+            ExecutionError::Unavailable {
+                stage: "storage dispatch"
+            },
+            ExecutionError::Unavailable { .. }
+        ));
+    }
 
     #[test]
     fn test_storage_error_recoverability() {
