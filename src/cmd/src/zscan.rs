@@ -17,11 +17,12 @@
 
 use std::sync::Arc;
 
+use bytes::Bytes;
 use client::Client;
 use resp::RespData;
 use storage::storage::Storage;
 
-use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta};
+use crate::{AclCategory, ClientExt, Cmd, CmdFlags, CmdMeta, CommandResult};
 use crate::{impl_cmd_clone_box, impl_cmd_meta};
 
 #[derive(Clone, Default)]
@@ -137,6 +138,78 @@ impl Cmd for ZscanCmd {
                 client.set_storage_error(&e);
             }
         }
+    }
+
+    fn execute_typed(&self, client: &Client, storage: Arc<Storage>) -> Option<CommandResult> {
+        let argv = client.argv();
+        Some(match argv.len() {
+            0..3 => Err(crate::error::CommandError::WrongArity {
+                command: self.name().to_string(),
+            }),
+            _ => {
+                let cursor = match String::from_utf8_lossy(&argv[2]).parse::<u64>() {
+                    Ok(cursor) => cursor,
+                    Err(_) => {
+                        return Some(Err(crate::error::CommandError::InvalidArgument(
+                            crate::error::ArgumentError::InvalidCursor,
+                        )));
+                    }
+                };
+                let mut pattern = None;
+                let mut count = None;
+                let mut index = 3;
+                while index < argv.len() {
+                    match String::from_utf8_lossy(&argv[index])
+                        .to_uppercase()
+                        .as_str()
+                    {
+                        "MATCH" if index + 1 < argv.len() => {
+                            pattern = Some(String::from_utf8_lossy(&argv[index + 1]).to_string());
+                            index += 2;
+                        }
+                        "COUNT" if index + 1 < argv.len() => {
+                            count = match String::from_utf8_lossy(&argv[index + 1]).parse::<usize>()
+                            {
+                                Ok(count) if count > 0 => Some(count),
+                                _ => {
+                                    return Some(Err(crate::error::CommandError::InvalidArgument(
+                                        crate::error::ArgumentError::NotInteger,
+                                    )));
+                                }
+                            };
+                            index += 2;
+                        }
+                        _ => {
+                            return Some(Err(crate::error::CommandError::InvalidArgument(
+                                crate::error::ArgumentError::Syntax,
+                            )));
+                        }
+                    }
+                }
+                storage
+                    .zscan(&argv[1], cursor, pattern.as_deref(), count)
+                    .map(|(next_cursor, members_scores)| {
+                        let items = members_scores
+                            .into_iter()
+                            .flat_map(|(member, score)| {
+                                [
+                                    RespData::BulkString(Some(Bytes::from(member))),
+                                    RespData::BulkString(Some(Bytes::from(score))),
+                                ]
+                            })
+                            .collect();
+                        RespData::Array(Some(vec![
+                            RespData::BulkString(Some(Bytes::from(next_cursor.to_string()))),
+                            RespData::Array(Some(items)),
+                        ]))
+                    })
+                    .map_err(crate::error::CommandError::storage)
+            }
+        })
+    }
+
+    fn uses_typed_execution(&self) -> bool {
+        true
     }
 }
 

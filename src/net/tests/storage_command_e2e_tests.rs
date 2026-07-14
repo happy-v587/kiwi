@@ -738,6 +738,44 @@ async fn storage_command_e2e_sorted_set_score_ranges_use_typed_replies() {
 }
 
 #[tokio::test]
+async fn storage_command_e2e_zscan_uses_typed_arguments_and_reply() {
+    let server = TestServer::start(None).await;
+    let mut stream = tokio::net::TcpStream::connect(server.addr)
+        .await
+        .expect("connect to server");
+
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["ZADD", "scores", "1", "first", "2", "second"],
+        )
+        .await,
+        RespData::Integer(2)
+    );
+    assert_eq!(
+        send_command(
+            &mut stream,
+            &["ZSCAN", "scores", "0", "MATCH", "second*", "COUNT", "10"],
+        )
+        .await,
+        RespData::Array(Some(vec![
+            RespData::BulkString(Some(Bytes::from_static(b"0"))),
+            RespData::Array(Some(vec![
+                RespData::BulkString(Some(Bytes::from_static(b"second"))),
+                RespData::BulkString(Some(Bytes::from_static(b"2"))),
+            ])),
+        ]))
+    );
+    let reply = send_command(&mut stream, &["ZSCAN", "scores", "invalid"]).await;
+    assert_eq!(
+        reply.as_string().expect("error string"),
+        error_catalog::INVALID_CURSOR
+    );
+
+    server.shutdown().await;
+}
+
+#[tokio::test]
 async fn storage_command_e2e_increment_commands_preserve_numeric_errors() {
     let server = TestServer::start(None).await;
     let mut stream = tokio::net::TcpStream::connect(server.addr)
